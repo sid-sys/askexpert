@@ -4,12 +4,14 @@ import { use, useEffect, useState } from "react";
 import { collection, query, where, getDocs, orderBy } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { db, storage } from "@/lib/firebase";
+import { useRouter } from "next/navigation";
 
 import { FirestoreUser, FirestoreQuestion, SocialLink, COLLECTIONS } from "@/lib/types";
 import PriceToggle from "@/components/PriceToggle";
 import RichComposer, { Attachment } from "@/components/RichComposer";
 import { getPPPFactor } from "@/lib/ppp";
 import Swal from "sweetalert2";
+import { useAuth } from "@/context/AuthContext";
 
 // ── helpers ─────────────────────────────────────────────────────────────────
 const URL_RE = /(https?:\/\/[^\s<>"']+)/g;
@@ -118,6 +120,17 @@ export default function CreatorProfilePage({ params }: { params: Promise<{ usern
   const [submitting,  setSubmitting]  = useState(false);
   const [submitted,   setSubmitted]   = useState(false);
 
+  const { user, userProfile } = useAuth();
+  const router = useRouter();
+
+  // Pre-fill user info if logged in
+  useEffect(() => {
+    if (userProfile) {
+      if (!name) setName(userProfile.displayName || "");
+      if (!email) setEmail(userProfile.email || "");
+    }
+  }, [userProfile]);
+
   // Vacation notification form
   const [subscribingEmail, setSubscribingEmail] = useState("");
   const [isSubscribing,    setIsSubscribing]    = useState(false);
@@ -125,6 +138,10 @@ export default function CreatorProfilePage({ params }: { params: Promise<{ usern
   // Public Q&A
   const [publicQA,   setPublicQA]   = useState<FirestoreQuestion[]>([]);
   const [qaExpanded, setQaExpanded] = useState<Record<string, boolean>>({});
+
+  // Subscription state
+  const [isSubscribed, setIsSubscribed] = useState(false);
+  const [checkingSub,  setCheckingSub]  = useState(false);
 
   // ── listen for live-preview postMessage ─────────────────────────────────
   useEffect(() => {
@@ -150,6 +167,34 @@ export default function CreatorProfilePage({ params }: { params: Promise<{ usern
     };
     fetchCountry();
   }, []);
+
+  // ── Check if user is already a subscriber ────────────────────────────────
+  useEffect(() => {
+    if (!user || !display?.uid) {
+      setIsSubscribed(false);
+      return;
+    }
+    
+    const checkSub = async () => {
+      setCheckingSub(true);
+      try {
+        const q = query(
+          collection(db, COLLECTIONS.SUBSCRIPTIONS),
+          where("creatorId", "==", display.uid),
+          where("followerId", "==", user.uid),
+          where("status", "==", "active")
+        );
+        const snap = await getDocs(q);
+        setIsSubscribed(!snap.empty);
+      } catch (err) {
+        console.error("Error checking subscription status:", err);
+      } finally {
+        setCheckingSub(false);
+      }
+    };
+    
+    checkSub();
+  }, [user, display?.uid]);
 
   // ── fetch creator ────────────────────────────────────────────────────────
   useEffect(() => {
@@ -307,6 +352,76 @@ export default function CreatorProfilePage({ params }: { params: Promise<{ usern
       return;
     }
 
+    // Monthly subscription requires login
+    if (payMode === "monthly" && !user) {
+      Swal.fire({
+        title: "Login Required",
+        text: "Monthly subscriptions require an account so you can manage your membership and chat with the creator.",
+        icon: "info",
+        showCancelButton: true,
+        confirmButtonText: "Log In / Sign Up",
+        cancelButtonText: "Maybe Later",
+        confirmButtonColor: "var(--purple)",
+      }).then((result) => {
+        if (result.isConfirmed) {
+          router.push(`/auth?redirect=${encodeURIComponent(window.location.pathname)}`);
+        }
+      });
+      return;
+    }
+
+    // If already subscribed, we can just create the question in Firestore directly
+    if (isSubscribed && payMode === "monthly") {
+      setSubmitting(true);
+      try {
+        const content = buildContent();
+        
+        // ── Upload attachments if any ───────────────────────────────────────────
+        const attachmentUrls: string[] = [];
+        for (const att of attachments) {
+          if (att.file) {
+            const storageRef = ref(storage, `asker_attachments/${Date.now()}_${att.file.name}`);
+            await uploadBytes(storageRef, att.file);
+            const url = await getDownloadURL(storageRef);
+            attachmentUrls.push(url);
+          }
+        }
+
+        const { addDoc, collection, serverTimestamp } = await import("firebase/firestore");
+        await addDoc(collection(db, COLLECTIONS.QUESTIONS), {
+          creatorId: display.uid,
+          content,
+          followerEmail: email.trim(),
+          followerName: name.trim(),
+          status: "PENDING",
+          pricePaid: 0,
+          createdAt: serverTimestamp(),
+          expiresAt: new Date(Date.now() + 72 * 60 * 60 * 1000), // 72 hours
+          attachmentUrls,
+          followerUid: user?.uid || null,
+          response: null,
+          stripePaymentIntentId: "SUB_FREE", // Mark as free via subscription
+          stripeChargeId: null,
+        });
+
+        setSubmitted(true);
+        setQuestion("");
+        setAttachments([]);
+        Swal.fire({
+          title: "Question Sent! 🚀",
+          text: "Since you are an active subscriber, your question has been sent directly to the creator.",
+          icon: "success",
+          confirmButtonColor: "var(--purple)",
+        });
+      } catch (err: any) {
+        console.error(err);
+        Swal.fire({ title: "Error", text: err.message, icon: "error" });
+      } finally {
+        setSubmitting(false);
+      }
+      return;
+    }
+
     setSubmitting(true);
     try {
       const content = buildContent();
@@ -349,6 +464,7 @@ export default function CreatorProfilePage({ params }: { params: Promise<{ usern
           stripeAccountId: display.stripeAccountId ?? null,
           countryCode,
           attachmentUrls,
+          followerUid:     user?.uid || null,
         }),
       });
 
@@ -812,7 +928,14 @@ export default function CreatorProfilePage({ params }: { params: Promise<{ usern
               position: "relative",
             }}
           >
-            {payMode === "monthly" && (
+            {isSubscribed ? (
+               <span style={{
+                position: "absolute", top: 8, right: 8,
+                background: "var(--green)", color: "#fff",
+                fontSize: "0.6rem", fontWeight: 800,
+                padding: "2px 7px", borderRadius: 99, letterSpacing: "0.04em",
+              }}>ACTIVE MEMBER</span>
+            ) : payMode === "monthly" && (
               <span style={{
                 position: "absolute", top: 8, right: 8,
                 background: "var(--purple)", color: "#fff",
@@ -824,10 +947,15 @@ export default function CreatorProfilePage({ params }: { params: Promise<{ usern
               Monthly Subscriber
             </p>
             <p style={{ fontSize: "2rem", fontWeight: 900, color: "var(--purple)", margin: 0, lineHeight: 1 }}>
-              {currencySymbol}{(((display.monthlyPrice || 0) * pppFactor) / 100).toFixed(2)}
+              {isSubscribed ? "Active" : `${currencySymbol}${(((display.monthlyPrice || 0) * pppFactor) / 100).toFixed(2)}`}
             </p>
             <p style={{ color: "var(--muted)", fontSize: "0.75rem", margin: "4px 0 0" }}>
-              per month {pppFactor < 1 && <span style={{ color: "var(--purple)", fontWeight: 700 }}>(-{Math.round((1 - pppFactor) * 100)}% PPP)</span>}
+              {isSubscribed ? "You are a member!" : (
+                <>
+                  per month {pppFactor < 1 ? `(-${Math.round((1 - pppFactor) * 100)}% PPP)` : ""}
+                  {!user && <span style={{ display: "block", color: "var(--purple)", fontWeight: 700, marginTop: 4 }}>• Login required to subscribe</span>}
+                </>
+              )}
             </p>
           </div>
 
@@ -962,11 +1090,15 @@ export default function CreatorProfilePage({ params }: { params: Promise<{ usern
                 display: "flex", justifyContent: "space-between", alignItems: "center",
               }}>
                 <span style={{ color: "var(--muted)", fontSize: "0.88rem" }}>
-                  {payMode === "one-time" ? "One-time payment" : "Monthly subscription"}
+                  {isSubscribed && payMode === "monthly" ? "Included in your subscription" : (payMode === "one-time" ? "One-time payment" : "Monthly subscription")}
                 </span>
                 <span style={{ color: "var(--purple)", fontWeight: 900, fontSize: "1.15rem" }}>
-                  ${((payMode === "one-time" ? (display.perQuestionPrice || 0) : (display.monthlyPrice || 0)) / 100).toFixed(2)}
-                  {payMode === "monthly" && <span style={{ fontSize: "0.75rem", fontWeight: 600 }}>/mo</span>}
+                  {isSubscribed && payMode === "monthly" ? "FREE" : (
+                    <>
+                      ${((payMode === "one-time" ? (display.perQuestionPrice || 0) : (display.monthlyPrice || 0)) / 100).toFixed(2)}
+                      {payMode === "monthly" && <span style={{ fontSize: "0.75rem", fontWeight: 600 }}>/mo</span>}
+                    </>
+                  )}
                 </span>
               </div>
             )}
@@ -996,6 +1128,8 @@ export default function CreatorProfilePage({ params }: { params: Promise<{ usern
                 "Temporarily Unavailable"
               ) : submitting ? (
                 "Redirecting to payment…"
+              ) : isSubscribed && payMode === "monthly" ? (
+                "Send Question (Subscriber Perk) 🌟"
               ) : payMode === "one-time" ? (
                 `Pay & Ask 💬 ${currencySymbol}${(((display.perQuestionPrice || 0) * pppFactor) / 100).toFixed(2)}`
               ) : (

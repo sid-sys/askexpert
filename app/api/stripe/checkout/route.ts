@@ -5,10 +5,15 @@ import { applyPPP } from "@/lib/ppp";
 
 export async function POST(req: NextRequest) {
   try {
-    const { creatorId, content, followerEmail, followerName, mode, price, countryCode, attachmentUrls } = await req.json();
+    const { creatorId, content, followerEmail, followerName, mode, price, countryCode, attachmentUrls, followerUid } = await req.json();
 
     if (!creatorId || !followerEmail || !price) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+    }
+
+    // Monthly subscription requires a logged-in user account
+    if (mode === "monthly" && !followerUid) {
+      return NextResponse.json({ error: "User account required for subscriptions. Please log in first." }, { status: 401 });
     }
 
     // ── Fetch creator profile ─────────────────────────────────────────────────
@@ -55,6 +60,7 @@ export async function POST(req: NextRequest) {
       creatorName,
       followerEmail,
       followerName,
+      followerUid:  followerUid || "",
       content:      (content ?? "").slice(0, 500),
       pricePaid:    finalPrice.toString(),
       expiresAt:    expiresAt.toISOString(),

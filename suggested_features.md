@@ -1,6 +1,9 @@
 # Suggested Features & Upgrades
 
 ## Implemented Features
+- **Subscriber Question Flow**: Fans with active monthly memberships can now ask questions for free.
+- **Membership Login Enforcement**: Mandatory account creation/login for all monthly subscriptions to track member perks.
+- **Smart Profile Form**: Automatic pre-filling of name and email for authenticated fans.
 - **Dynamic SLA Framework**: Standardized `responseTimeHours` across the platform.
 - **SLA Freezing**: Saving SLA and creator details directly in the question document for reliability and performance.
 - **Admin Testing Tools**: Dynamic email preview and testing for creator-specific settings.
@@ -22,6 +25,7 @@
 - [x] **File Cleanup API**: Automated storage purging for files older than 7 days. (Implemented ✅)
 - [x] **Mobile Settings Consolidation**: Unified Pricing, Payout, and Profile under a single "Settings" menu for small mobile devices. (Implemented ✅)
 - [x] **Profile Tab Synchronization**: Fixed state bugs ensuring the profile page correctly resets to the default tab when navigated. (Implemented ✅)
+- [x] **GSAP Animation Stabilization**: Fixed console warnings by correctly scoping GSAP contexts to a parent container in `app/page.tsx`. (Implemented ✅)
 - [x] **Conditional Nav Highlighting**: Suppressed navigation highlights when secondary popover menus are active. (Implemented ✅)
 
 ## Suggested Features
@@ -44,3 +48,10 @@
 16. **Interactive Image Previews**: Use `SweetAlert2` to display high-resolution image attachments in a beautiful modal when clicked, rather than opening them in a new tab.
 17. **Brutalism-Inspired Page Transitions**: Use `Framer Motion` or `GSAP` to create "page slide" or "zoom" transitions when navigating between dashboard tabs, reinforcing the editorial aesthetic.
 18. **Smart Session Recovery**: Implement a local-storage-based "Draft" system for the Rich Text Composer so creators don't lose their answers if the browser crashes or they accidentally refresh.
+19. **AOS (Animate On Scroll) Entrance Animations**: Integrate the `AOS` library on the landing page to make value propositions and testimonials "pop" into view as users scroll, increasing engagement.
+20. **Lenis Smooth Scroll Integration**: Implement `Lenis` globally to create a premium, cinematic scrolling experience that feels responsive and high-end across all devices.
+21. **GSAP Kinetic Cursor**: Add a desktop-only custom cursor that reacts to interactive elements (buttons, links) with springy, fluid animations, reinforcing the platform's tech-forward identity.
+22. **Member-only Updates**: Allow creators to post exclusive updates, files, or behind-the-scenes content visible only to active monthly subscribers.
+23. **Subscriber Push Notifications**: Notify fans instantly when a creator they subscribe to is back from vacation or posts a new public Q&A.
+24. **Multi-tier Memberships**: Support different subscription levels (e.g., Fan, Superfan, VIP) with varying perks like guaranteed faster response times or exclusive content access.
+

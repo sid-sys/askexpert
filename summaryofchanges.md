@@ -1,5 +1,12 @@
 # Summary of Changes
 
+## Subscriber & Membership Flow (New)
+- **Free Subscriber Questions**: Implemented logic to allow fans with active monthly subscriptions to ask questions for free. This bypasses Stripe and creates a "SUB_FREE" document in Firestore.
+- **Mandatory Login for Subscriptions**: Enforced a strict rule that fans must have an account to subscribe. This ensures we can track their "Active Member" status and provide them with their perks.
+- **Server-Side Validation**: Added a check in `app/api/stripe/checkout/route.ts` to block subscription attempts without a valid `followerUid`.
+- **Client-Side UX**: Added a "Login required" hint on the monthly pricing card and a pre-checkout login prompt.
+- **Smart Form Pre-filling**: Logged-in users now see their name and email automatically filled in the question form, reducing friction.
+
 ## Infrastructure & Rollback
 - **Full Project Reversion**: Performed a complete rollback of the local codebase to the last stable commit (`8f6e632`). This action utilized `git reset --hard` for tracked files and `git clean -fd` for untracked directories, successfully purging experimental features (Asker UI, Chat system) and restoring the platform to its previously hardened production state.
 - **Environment Restoration**: Ran `npm install` to synchronize dependencies and successfully started the local development server on `http://localhost:3000`. Confirmed the home page loads correctly.
@@ -12,6 +19,8 @@
 - **Mobile-First Hardening**: Standardized all mobile nav behaviors to use JS-based viewport detection to avoid CSS media-query conflicts within iframes. Fixed NavBar icon-only responsiveness to ensure navigation remains clean on small screens (<500px).
 - **Active State Optimization**: Updated `Sidebar.tsx` and `BottomNav.tsx` to suppress item highlights when the user profile popover is open, ensuring a clean and focused UI.
 - **Profile State Synchronization**: Fixed a bug in `app/profile/page.tsx` where navigating back to the main profile page from a sub-tab (like Pricing) didn't correctly reset the view. The tab now defaults to 'profile' if no URL parameter is present.
+- **GSAP Stabilization**: Fixed `.stat-card` targeting warnings in `app/page.tsx` by expanding the animation context scope.
+- **Mandatory Debugging**: Added `/debug/mobile` route for real-time layout auditing at 375px width.
 
 ## Infrastructure & Maintenance
 - **Storage Retention Policy**: Implemented a new `/api/cron/cleanup-storage` endpoint to automatically purge `asker_attachments/` and `answers/` from Firebase Storage after 7 days.

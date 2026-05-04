@@ -60,12 +60,14 @@ function AuthForm() {
     }
   };
 
+  const redirectPath = searchParams.get("redirect") || "/dashboard";
+
   const { signInWithGoogle, signInWithEmail, signUpWithEmail, sendPasswordReset, user } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
-    if (user) router.push("/dashboard");
-  }, [user, router]);
+    if (user) router.push(redirectPath);
+  }, [user, router, redirectPath]);
 
   // ── Login ────────────────────────────────────────────────────────────────
   const handleLogin = async (e: React.FormEvent) => {
@@ -73,7 +75,7 @@ function AuthForm() {
     setError(""); setLoading(true);
     try {
       await signInWithEmail(email, password);
-      router.push("/dashboard");
+      router.push(redirectPath);
     } catch (err: unknown) {
       setError(friendlyError(err));
     } finally { setLoading(false); }
@@ -129,7 +131,7 @@ function AuthForm() {
       if (u && selectedPlan && PAID_PLANS.includes(selectedPlan)) {
         await redirectToPlanCheckout(u.uid, u.email ?? "", selectedPlan);
       } else {
-        router.push("/dashboard");
+        router.push(redirectPath);
       }
     } catch (err: unknown) {
       setError(friendlyError(err));
