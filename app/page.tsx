@@ -81,10 +81,9 @@ export default function LandingPage() {
   }, []);
 
   return (
-    <div style={{ background: "#fff" }}>
-
+    <div ref={heroRef} style={{ background: "#fff" }}>
       {/* ─── HERO ─── */}
-      <section ref={heroRef} style={{ textAlign: "center", padding: "5rem 5% 5rem", position: "relative" }}>
+      <section style={{ textAlign: "center", padding: "5rem 5% 5rem", position: "relative" }}>
         {/* Soft blobs */}
         <div style={{ position: "absolute", top: -100, left: "30%", width: 400, height: 400, background: "#f5f3ff", borderRadius: "50%", filter: "blur(80px)", opacity: 0.7, zIndex: 0, pointerEvents: "none" }} />
         <div style={{ position: "absolute", top: 100, right: "10%", width: 250, height: 250, background: "#fffbeb", borderRadius: "50%", filter: "blur(60px)", opacity: 0.8, zIndex: 0, pointerEvents: "none" }} />
