@@ -1,0 +1,292 @@
+"use client";
+
+import Swal from "sweetalert2";
+
+interface PayoutTabProps {
+  platformPlan: string;
+  totalEarnings: number;
+  pendingBalance: number;
+  payoutUnlocked: boolean;
+  earningsFormatted: string;
+  progressPct: number;
+  handleManagePlan: () => void;
+  portalLoading: boolean;
+  userProfile: any;
+  handlePayoutSetup: () => void;
+  stripeLoading: boolean;
+  payoutMethod: "stripe_connect" | "local_bank" | "international_bank" | "paypal" | "wise" | "manual_bank";
+  setPayoutMethod: (v: any) => void;
+  accountHolder: string;
+  setAccountHolder: (v: string) => void;
+  bankName: string;
+  setBankName: (v: string) => void;
+  accountNumber: string;
+  setAccountNumber: (v: string) => void;
+  bankCountry: string;
+  setBankCountry: (v: string) => void;
+  ifscCode: string;
+  setIfscCode: (v: string) => void;
+  swiftCode: string;
+  setSwiftCode: (v: string) => void;
+  paypalEmail: string;
+  setPaypalEmail: (v: string) => void;
+  wiseEmail: string;
+  setWiseEmail: (v: string) => void;
+}
+
+const labelStyle: React.CSSProperties = {
+  display: "block",
+  color: "var(--text-dark)",
+  fontSize: "0.85rem",
+  fontWeight: 700,
+  textTransform: "uppercase",
+  marginBottom: 8,
+  letterSpacing: "0.05em",
+};
+
+function chipStyle(active: boolean, color: "purple" | "green" | "orange"): React.CSSProperties {
+  const primaryColor = color === "purple" ? "var(--purple)" : color === "green" ? "var(--green)" : "var(--orange)";
+  return {
+    padding: "0.8rem 1.4rem",
+    fontFamily: "var(--font-main)",
+    fontSize: "0.95rem",
+    fontWeight: 800,
+    borderRadius: 12,
+    border: `2px solid ${active ? primaryColor : "var(--border)"}`,
+    background: active ? primaryColor : "#fff",
+    color: active ? "#fff" : "var(--text-dark)",
+    cursor: "pointer",
+    transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
+    boxShadow: active ? `4px 4px 0px rgba(0,0,0,0.1)` : "2px 2px 0px rgba(0,0,0,0.05)",
+    transform: active ? "translateY(-2px)" : "none",
+  };
+}
+
+export default function PayoutTab({
+  platformPlan, totalEarnings, pendingBalance, payoutUnlocked, earningsFormatted, progressPct,
+  handleManagePlan, portalLoading, userProfile, handlePayoutSetup, stripeLoading,
+  payoutMethod, setPayoutMethod, accountHolder, setAccountHolder, bankName, setBankName,
+  accountNumber, setAccountNumber, bankCountry, setBankCountry, ifscCode, setIfscCode,
+  swiftCode, setSwiftCode, paypalEmail, setPaypalEmail, wiseEmail, setWiseEmail
+}: PayoutTabProps) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 32 }}>
+      
+      {/* EARNINGS PROGRESS */}
+      <div className="card-brutal-purple">
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
+          <div style={{ background: "#fff", color: "var(--purple)", width: 40, height: 40, borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.2rem", border: "2px solid rgba(124,58,237,0.2)" }}>📊</div>
+          <h2 className="font-display" style={{ fontSize: "1.8rem", color: "var(--purple)", margin: 0 }}>Lifetime Earnings</h2>
+        </div>
+        <p style={{ color: "var(--text-dark)", fontSize: "0.95rem", marginBottom: 20, fontWeight: 500 }}>
+          Track your total platform earnings. Payouts are processed automatically via your chosen method once they clear escrow.
+        </p>
+        <div style={{ background: "#fff", border: "2px solid var(--border)", borderRadius: 16, padding: 24 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12, alignItems: "flex-end" }}>
+            <div>
+              <span style={{ fontSize: "0.85rem", color: "var(--text-muted)", fontWeight: 700, textTransform: "uppercase", display: "block", marginBottom: 4 }}>Total Cleared</span>
+              <span style={{ fontFamily: "var(--font-main)", fontWeight: 900, fontSize: "2rem", color: "var(--text-dark)", lineHeight: 1 }}>{earningsFormatted}</span>
+            </div>
+            <div style={{ textAlign: "right" }}>
+              <span style={{ fontSize: "0.85rem", color: "var(--text-muted)", fontWeight: 700, textTransform: "uppercase", display: "block", marginBottom: 4 }}>Payout Threshold</span>
+              <span style={{ fontFamily: "var(--font-main)", fontWeight: 800, fontSize: "1.2rem", color: "var(--text-dark)", lineHeight: 1 }}>$50.00</span>
+            </div>
+          </div>
+          <div style={{ height: 16, background: "#f3f4f6", borderRadius: 99, overflow: "hidden", border: "1px solid inset rgba(0,0,0,0.1)" }}>
+            <div style={{
+              height: "100%", width: `${progressPct}%`,
+              background: payoutUnlocked ? "var(--green)" : "var(--purple)",
+              borderRadius: 99, transition: "width 0.8s cubic-bezier(0.4, 0, 0.2, 1)",
+            }} />
+          </div>
+          {payoutUnlocked && (
+            <p style={{ color: "var(--green)", fontSize: "0.85rem", marginTop: 12, fontWeight: 700, display: "flex", alignItems: "center", gap: 6 }}>
+              <span>✅</span> Payout threshold reached! You are eligible for automated transfers.
+            </p>
+          )}
+        </div>
+      </div>
+
+      {/* PAYOUT METHOD CHOOSER */}
+      <div className={`card-brutal ${payoutUnlocked ? "card-brutal-green" : ""}`}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
+          <div style={{ background: payoutUnlocked ? "rgba(16,185,129,0.1)" : "var(--bg-soft)", color: payoutUnlocked ? "var(--green)" : "var(--text-dark)", width: 40, height: 40, borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.2rem", border: `2px solid ${payoutUnlocked ? "rgba(16,185,129,0.3)" : "var(--border)"}` }}>💳</div>
+          <h2 className="font-display" style={{ fontSize: "1.8rem", color: payoutUnlocked ? "var(--green)" : "var(--text-dark)", margin: 0 }}>Payout Method</h2>
+        </div>
+        <p style={{ color: "var(--text-dark)", fontSize: "0.95rem", marginBottom: 24, fontWeight: 500 }}>
+          Choose how you receive your earnings. We recommend Stripe Connect for automated, fast transfers.
+        </p>
+
+        <div style={{ display: "flex", gap: 16, marginBottom: 30, flexWrap: "wrap" }}>
+          <button
+            onClick={() => setPayoutMethod("stripe_connect")}
+            style={chipStyle(payoutMethod === "stripe_connect", "purple")}
+          >
+            ⚡ Stripe Connect (Auto)
+          </button>
+          <button
+            onClick={() => setPayoutMethod(payoutMethod === "stripe_connect" ? "paypal" : payoutMethod)}
+            style={chipStyle(payoutMethod !== "stripe_connect", "green")}
+          >
+            🏦 Manual Transfer (Global)
+          </button>
+        </div>
+
+        {payoutMethod !== "stripe_connect" && (
+          <div style={{ marginBottom: 30, padding: 24, border: "2px solid var(--border)", borderRadius: 16, background: "#fafafa" }}>
+            <label style={labelStyle}>Select Transfer Service</label>
+            <div style={{ position: "relative" }}>
+              <select 
+                className="input-brutal" 
+                value={payoutMethod === "manual_bank" ? "paypal" : payoutMethod} 
+                onChange={(e) => setPayoutMethod(e.target.value as any)}
+                style={{ width: "100%", cursor: "pointer", background: "#fff", height: 56, fontSize: "1.05rem", fontWeight: 600, appearance: "none" }}
+              >
+                <optgroup label="✨ Recommended (Fast & Easy)">
+                  <option value="paypal">💙 PayPal</option>
+                  <option value="wise">🟢 Wise (Low Fees)</option>
+                </optgroup>
+                <optgroup label="Other Methods">
+                  <option value="local_bank">🏦 Local Bank (India IMPS/NEFT)</option>
+                  <option value="international_bank">🌍 International Wire (Slower)</option>
+                </optgroup>
+              </select>
+              <div style={{ position: "absolute", right: 20, top: "50%", transform: "translateY(-50%)", pointerEvents: "none", fontSize: "0.8rem", opacity: 0.5 }}>▼</div>
+            </div>
+            <p style={{ color: "var(--text-muted)", fontSize: "0.85rem", marginTop: 12, fontWeight: 500 }}>
+              Wise and PayPal are the easiest methods for receiving funds globally with minimal setup.
+            </p>
+          </div>
+        )}
+
+        <div style={{ background: "#fff", border: "2px solid var(--border)", borderRadius: 16, padding: 24, boxShadow: "4px 4px 0px rgba(0,0,0,0.05)" }}>
+          {payoutMethod === "stripe_connect" && (
+            <div>
+              {userProfile?.stripeOnboardingComplete ? (
+                <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+                  <span className="badge badge-green" style={{ fontSize: "0.95rem", padding: "8px 16px" }}>✅ Stripe Connected</span>
+                  <div style={{ borderLeft: "2px solid var(--border)", paddingLeft: 16 }}>
+                    <span style={{ color: "var(--text-muted)", fontSize: "0.75rem", fontWeight: 700, textTransform: "uppercase", display: "block" }}>Account ID</span>
+                    <span style={{ color: "var(--text-dark)", fontSize: "0.95rem", fontFamily: "monospace", fontWeight: 600 }}>{userProfile.stripeAccountId}</span>
+                  </div>
+                  <button onClick={handlePayoutSetup} disabled={stripeLoading} className="btn-brutal btn-purple" style={{ marginLeft: "auto" }}>
+                    {stripeLoading ? "..." : "✏️ Edit Payout Account"}
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <div style={{ display: "flex", gap: 16, marginBottom: 24, flexWrap: "wrap" }}>
+                    {[{ icon: "🏦", title: "Bank Account", desc: "Checking / savings" }, { icon: "💳", title: "Debit Card", desc: "Visa / Mastercard" }, { icon: "🌍", title: "Multi-currency", desc: "140+ countries" }].map(item => (
+                      <div key={item.title} style={{ flex: 1, padding: "20px 16px", border: "2px solid var(--border)", borderRadius: 12, minWidth: 140, textAlign: "center", background: "#fafafa" }}>
+                        <p style={{ fontSize: "2rem", margin: "0 0 12px" }}>{item.icon}</p>
+                        <p style={{ fontWeight: 800, fontSize: "0.95rem", color: "var(--text-dark)", margin: "0 0 4px" }}>{item.title}</p>
+                        <p style={{ color: "var(--text-muted)", fontSize: "0.85rem", margin: 0, fontWeight: 500 }}>{item.desc}</p>
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 20, flexWrap: "wrap" }}>
+                    <button onClick={handlePayoutSetup} disabled={stripeLoading} className="btn-primary" style={{ padding: "14px 32px", fontSize: "1.1rem" }}>
+                      {stripeLoading ? "Redirecting to Stripe..." : "⚡ Set Up Stripe Payout"}
+                    </button>
+                    <p style={{ color: "var(--text-muted)", fontSize: "0.85rem", fontWeight: 600, margin: 0, display: "flex", alignItems: "center", gap: 6 }}>
+                      🔒 Secured by Stripe. We never store your bank details.
+                    </p>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
+          {(payoutMethod === "local_bank" || payoutMethod === "manual_bank") && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+              <div style={{ padding: "14px 20px", background: "rgba(124,58,237,0.1)", border: "2px solid var(--purple)", borderRadius: 12, fontSize: "0.95rem", color: "var(--purple)", fontWeight: 600, display: "flex", gap: 12, alignItems: "flex-start" }}>
+                <span style={{ fontSize: "1.2rem" }}>💡</span>
+                <span>Ideal for India (IMPS/NEFT) and regions with direct local transfers. Admin will transfer your earnings monthly.</span>
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 20 }}>
+                <div>
+                  <label style={labelStyle}>Account Holder Name</label>
+                  <input className="input-brutal" value={accountHolder} onChange={e => setAccountHolder(e.target.value)} placeholder="Full legal name" />
+                </div>
+                <div>
+                  <label style={labelStyle}>Bank Name</label>
+                  <input className="input-brutal" value={bankName} onChange={e => setBankName(e.target.value)} placeholder="e.g. HDFC Bank" />
+                </div>
+                <div>
+                  <label style={labelStyle}>Account Number</label>
+                  <input className="input-brutal" value={accountNumber} onChange={e => setAccountNumber(e.target.value)} placeholder="Account number" />
+                </div>
+                <div>
+                  <label style={labelStyle}>IFSC / Routing Code</label>
+                  <input className="input-brutal" value={ifscCode} onChange={e => setIfscCode(e.target.value)} placeholder="e.g. HDFC0001234" />
+                </div>
+              </div>
+              <p style={{ color: "var(--green)", fontSize: "0.85rem", marginTop: 4, fontWeight: 600 }}>🔐 Details are encrypted at rest. Only admins can see them for processing payouts.</p>
+            </div>
+          )}
+
+          {payoutMethod === "international_bank" && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+              <div style={{ padding: "14px 20px", background: "rgba(249,115,22,0.1)", border: "2px solid var(--orange)", borderRadius: 12, fontSize: "0.95rem", color: "#c2410c", fontWeight: 600, display: "flex", gap: 12, alignItems: "flex-start" }}>
+                <span style={{ fontSize: "1.2rem" }}>🌍</span>
+                <span>Ideal for international wire transfers (SWIFT/BIC). High bank fees may apply. Admin transfers monthly.</span>
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 20 }}>
+                <div style={{ gridColumn: "1 / -1" }}>
+                  <label style={labelStyle}>Account Holder Name</label>
+                  <input className="input-brutal" value={accountHolder} onChange={e => setAccountHolder(e.target.value)} placeholder="Full legal name" />
+                </div>
+                <div>
+                  <label style={labelStyle}>Bank Name</label>
+                  <input className="input-brutal" value={bankName} onChange={e => setBankName(e.target.value)} placeholder="e.g. Barclays" />
+                </div>
+                <div>
+                  <label style={labelStyle}>Account Number / IBAN</label>
+                  <input className="input-brutal" value={accountNumber} onChange={e => setAccountNumber(e.target.value)} placeholder="Account number or IBAN" />
+                </div>
+                <div>
+                  <label style={labelStyle}>Country (ISO code)</label>
+                  <input className="input-brutal" value={bankCountry} onChange={e => setBankCountry(e.target.value)} placeholder="e.g. GB, US" maxLength={2} style={{ textTransform: "uppercase" }} />
+                </div>
+                <div>
+                  <label style={labelStyle}>SWIFT / BIC Code</label>
+                  <input className="input-brutal" value={swiftCode} onChange={e => setSwiftCode(e.target.value)} placeholder="e.g. HDFCINBB" />
+                </div>
+              </div>
+              <p style={{ color: "var(--green)", fontSize: "0.85rem", marginTop: 4, fontWeight: 600 }}>🔐 Details are encrypted at rest. Only admins can see them for processing payouts.</p>
+            </div>
+          )}
+
+          {payoutMethod === "paypal" && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+              <div style={{ padding: "14px 20px", background: "rgba(59,130,246,0.1)", border: "2px solid #3b82f6", borderRadius: 12, fontSize: "0.95rem", color: "#1d4ed8", fontWeight: 600, display: "flex", gap: 12, alignItems: "flex-start" }}>
+                <span style={{ fontSize: "1.2rem" }}>💙</span>
+                <span>Receive payouts directly to your PayPal account. Standard PayPal receiving fees may apply. Admin transfers monthly.</span>
+              </div>
+              <div>
+                <label style={labelStyle}>PayPal Email Address</label>
+                <input className="input-brutal" value={paypalEmail} onChange={e => setPaypalEmail(e.target.value)} placeholder="paypal@email.com" type="email" style={{ maxWidth: 400 }} />
+              </div>
+              <p style={{ color: "var(--green)", fontSize: "0.85rem", marginTop: 4, fontWeight: 600 }}>🔐 Details are encrypted at rest. Only admins can see them for processing payouts.</p>
+            </div>
+          )}
+
+          {payoutMethod === "wise" && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+              <div style={{ padding: "14px 20px", background: "rgba(16,185,129,0.1)", border: "2px solid var(--green)", borderRadius: 12, fontSize: "0.95rem", color: "var(--green)", fontWeight: 600, display: "flex", gap: 12, alignItems: "flex-start" }}>
+                <span style={{ fontSize: "1.2rem" }}>🟢</span>
+                <span>Receive payouts directly to your Wise account using your Wise email. Low fees. Admin transfers monthly.</span>
+              </div>
+              <div>
+                <label style={labelStyle}>Wise Email Address</label>
+                <input className="input-brutal" value={wiseEmail} onChange={e => setWiseEmail(e.target.value)} placeholder="wise@email.com" type="email" style={{ maxWidth: 400 }} />
+              </div>
+              <p style={{ color: "var(--green)", fontSize: "0.85rem", marginTop: 4, fontWeight: 600 }}>🔐 Details are encrypted at rest. Only admins can see them for processing payouts.</p>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+

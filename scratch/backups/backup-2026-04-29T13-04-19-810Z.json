@@ -1,0 +1,351 @@
+{
+  "users": [
+    {
+      "id": "hCSrGtHMViYcIT2CfYRhqPk7AF32",
+      "bio": "I've spent 10 years building companies. Ask me anything about scaling, fundraising, or hiring! Testing auto-save feature now! This is premium logic.",
+      "displayName": "sidharth",
+      "isAdmin": true,
+      "isCreator": true,
+      "photoURL": "",
+      "pppEnabled": false,
+      "responseFormats": [
+        "text"
+      ],
+      "stripeAccountId": "acct_1TQ6hBEavQ390NsI",
+      "stripeCustomerId": "cus_UNssNTviMRkA3H",
+      "stripeOnboardingComplete": true,
+      "tagline": "Startup founder | 2x exit | Building in public",
+      "uid": "hCSrGtHMViYcIT2CfYRhqPk7AF32",
+      "username": "sid",
+      "bankDetails": {
+        "accountHolderName": "sid",
+        "accountNumber": "",
+        "bankName": "HDFC",
+        "country": "",
+        "ifscCode": "",
+        "swiftCode": "",
+        "paypalEmail": "",
+        "wiseEmail": ""
+      },
+      "lifetimeEarnings": 5000,
+      "perQuestionPrice": 500,
+      "monthlyPrice": 1000,
+      "currency": "usd",
+      "subscriberPerks": [
+        "⚡ Priority answers — I respond to subscribers first",
+        "📝 Longer, more detailed answers for subscribers"
+      ],
+      "categories": [
+        "📈 Marketing",
+        "🧠 Mindset"
+      ],
+      "socialLinks": [
+        {
+          "label": "insta",
+          "url": "nn"
+        },
+        {
+          "label": "yt",
+          "url": "kas"
+        },
+        {
+          "label": "tiktok",
+          "url": "tk"
+        }
+      ],
+      "payoutMethod": "international_bank",
+      "totalEarnings": 5500,
+      "pendingPayoutBalance": 5425,
+      "responseTimeHours": 0.03333333333333333,
+      "updatedAt": {
+        "_seconds": 1777378300,
+        "_nanoseconds": 580000000
+      },
+      "email": "sidharthbabu9@gmail.com"
+    }
+  ],
+  "questions": [
+    {
+      "id": "1bbYGjhloNAH8cZqmxJB",
+      "content": "kmk",
+      "creatorCut": 4.25,
+      "creatorId": "hCSrGtHMViYcIT2CfYRhqPk7AF32",
+      "creatorName": "sidharth",
+      "currency": "usd",
+      "expiresAt": {
+        "_seconds": 1777372687,
+        "_nanoseconds": 845000000
+      },
+      "feePercent": 15,
+      "followerEmail": "sidharthbabu9@gmail.com",
+      "originalPrice": 5,
+      "payoutMethod": "manual_bank",
+      "platformPlan": "free",
+      "pppApplied": false,
+      "pricePaid": 5,
+      "status": "pending",
+      "paymentStatus": "paid",
+      "createdAt": {
+        "_seconds": 1777376047,
+        "_nanoseconds": 421000000
+      }
+    },
+    {
+      "id": "693pZqxQ9FvZ2FXn33sn",
+      "content": "What is the weather?",
+      "followerEmail": "sidharthbabu96@gmail.com",
+      "creatorId": "eZAZfVS1E5eHNfFLUClscFOLeU02",
+      "pricePaid": 500,
+      "currency": "usd",
+      "expiresAt": {
+        "_seconds": 1777214792,
+        "_nanoseconds": 567000000
+      },
+      "createdAt": {
+        "_seconds": 1776955594,
+        "_nanoseconds": 418000000
+      },
+      "response": "weather is fine",
+      "answeredAt": {
+        "_seconds": 1776955610,
+        "_nanoseconds": 10000000
+      },
+      "answerType": "text",
+      "isNew": false,
+      "attachmentUrls": [
+        "C:\\Users\\sidha\\Downloads\\1.mp4",
+        "C:\\Users\\sidha\\Downloads\\screencapture-play-google-console-u-1-developers-6566705826145218174-paymentssettings-2026-04-22-15_11_17.png",
+        "C:\\Users\\sidha\\Downloads\\2.broke.girls.S02E02.LOL.English-WWW.MY-SUBS.CO.srt"
+      ],
+      "status": "ANSWERED"
+    },
+    {
+      "id": "AUd98kCF16dCQ9E8mo88",
+      "creatorId": "hCSrGtHMViYcIT2CfYRhqPk7AF32",
+      "content": "hi",
+      "followerEmail": "sidharthbabu96@gmail.com",
+      "status": "PENDING",
+      "pricePaid": 0,
+      "stripePaymentIntentId": "",
+      "stripeChargeId": null,
+      "answeredAt": null,
+      "expiresAt": {
+        "_seconds": 1776681375,
+        "_nanoseconds": 158000000
+      },
+      "isPublicAnswer": false,
+      "isNew": true,
+      "attachmentUrls": [],
+      "createdAt": {
+        "_seconds": 1776594975,
+        "_nanoseconds": 415000000
+      }
+    },
+    {
+      "id": "Eoz9yzPUFss0WMnPhpca",
+      "content": "hi",
+      "response": null,
+      "status": "PENDING",
+      "pricePaid": 500,
+      "followerEmail": "sidharthbabu96@gmail.com",
+      "creatorId": "hCSrGtHMViYcIT2CfYRhqPk7AF32",
+      "stripePaymentIntentId": "pi_3TNuubEw4pLuSFgr1KdLTY0a",
+      "stripeChargeId": null,
+      "stripeSessionId": "cs_test_a10DiaSsEE4IuZHBUymnunTNadSvPJ9K1gSI5JXqNv29JbzERf1anmKkLq",
+      "answeredAt": null,
+      "expiresAt": {
+        "_seconds": 1776607017,
+        "_nanoseconds": 334000000
+      },
+      "payoutMethod": "manual_bank",
+      "createdAt": {
+        "_seconds": 1776603444,
+        "_nanoseconds": 962000000
+      }
+    },
+    {
+      "id": "jHeLXgtElIkpuZaPKaQx",
+      "content": "58",
+      "response": null,
+      "status": "PENDING",
+      "pricePaid": 500,
+      "followerEmail": "sidharthbabu9@gmail.com",
+      "creatorId": "hCSrGtHMViYcIT2CfYRhqPk7AF32",
+      "stripePaymentIntentId": "pi_3TR9yZEw4pLuSFgr0gEuiJmI",
+      "stripeChargeId": null,
+      "stripeSessionId": "cs_test_a1W0sC36M1poGsvaTRo8wBGrwdsSMwtjBjduBvF4GE3juNQ97PJvTWTaah",
+      "answeredAt": null,
+      "expiresAt": {
+        "_seconds": 1777549113,
+        "_nanoseconds": 617000000
+      },
+      "payoutMethod": "manual_bank",
+      "createdAt": {
+        "_seconds": 1777376337,
+        "_nanoseconds": 580000000
+      }
+    },
+    {
+      "id": "jJra3MTZstvuICtbYQPG",
+      "creatorId": "hCSrGtHMViYcIT2CfYRhqPk7AF32",
+      "content": "asd",
+      "followerEmail": "ss@gmail.com",
+      "status": "PENDING",
+      "pricePaid": 0,
+      "stripePaymentIntentId": "",
+      "stripeChargeId": null,
+      "answeredAt": null,
+      "expiresAt": {
+        "_seconds": 1776681351,
+        "_nanoseconds": 874000000
+      },
+      "isPublicAnswer": false,
+      "isNew": true,
+      "attachmentUrls": [],
+      "createdAt": {
+        "_seconds": 1776594952,
+        "_nanoseconds": 453000000
+      }
+    },
+    {
+      "id": "nCxC3TkBiB49hd7GRQdc",
+      "content": "bjhbjh",
+      "creatorCut": 4.25,
+      "creatorId": "hCSrGtHMViYcIT2CfYRhqPk7AF32",
+      "creatorName": "sidharth",
+      "currency": "usd",
+      "expiresAt": {
+        "_seconds": 1777375626,
+        "_nanoseconds": 371000000
+      },
+      "feePercent": 15,
+      "followerEmail": "sidharthbabu9@gmail.com",
+      "originalPrice": 5,
+      "payoutMethod": "manual_bank",
+      "platformPlan": "free",
+      "pppApplied": false,
+      "pricePaid": 5,
+      "status": "pending",
+      "paymentStatus": "paid",
+      "createdAt": {
+        "_seconds": 1777376046,
+        "_nanoseconds": 489000000
+      }
+    },
+    {
+      "id": "vtJaEXxL1SBVQjFIoQ4L",
+      "content": "what is the weather",
+      "followerEmail": "sidharthbabu96@gmail.com",
+      "creatorId": "eZAZfVS1E5eHNfFLUClscFOLeU02",
+      "pricePaid": 500,
+      "currency": "usd",
+      "expiresAt": {
+        "_seconds": 1777214999,
+        "_nanoseconds": 246000000
+      },
+      "createdAt": {
+        "_seconds": 1776955800,
+        "_nanoseconds": 799000000
+      },
+      "response": "weather is fine",
+      "answeredAt": {
+        "_seconds": 1776955801,
+        "_nanoseconds": 261000000
+      },
+      "answerType": "text",
+      "isNew": false,
+      "attachmentUrls": [
+        "C:\\Users\\sidha\\Downloads\\1.mp4",
+        "C:\\Users\\sidha\\Downloads\\screencapture-play-google-console-u-1-developers-6566705826145218174-paymentssettings-2026-04-22-15_11_17.png",
+        "C:\\Users\\sidha\\Downloads\\2.broke.girls.S02E02.LOL.English-WWW.MY-SUBS.CO.srt"
+      ],
+      "status": "ANSWERED"
+    },
+    {
+      "id": "wd5lH9wYGLHyCGASaxPO",
+      "content": "5",
+      "creatorCut": 4.25,
+      "creatorId": "hCSrGtHMViYcIT2CfYRhqPk7AF32",
+      "creatorName": "sidharth",
+      "currency": "usd",
+      "expiresAt": {
+        "_seconds": 1777375975,
+        "_nanoseconds": 399000000
+      },
+      "feePercent": 15,
+      "followerEmail": "sidharthbabu9@gmail.com",
+      "originalPrice": 5,
+      "payoutMethod": "manual_bank",
+      "platformPlan": "free",
+      "pppApplied": false,
+      "pricePaid": 5,
+      "status": "pending",
+      "paymentStatus": "paid",
+      "createdAt": {
+        "_seconds": 1777376045,
+        "_nanoseconds": 909000000
+      }
+    }
+  ],
+  "pendingPayouts": [
+    {
+      "id": "1CqEU5a8hUbEvC1wJohn",
+      "creatorId": "hCSrGtHMViYcIT2CfYRhqPk7AF32",
+      "creatorName": "sidharth",
+      "creatorEmail": "sidharthbabu9@gmail.com",
+      "amount": 425,
+      "platformFeeAmount": 75,
+      "totalPaid": 500,
+      "currency": "usd",
+      "questionId": "jHeLXgtElIkpuZaPKaQx",
+      "paymentType": "per_question",
+      "status": "pending",
+      "stripeSessionId": "cs_test_a1W0sC36M1poGsvaTRo8wBGrwdsSMwtjBjduBvF4GE3juNQ97PJvTWTaah",
+      "createdAt": {
+        "_seconds": 1777376339,
+        "_nanoseconds": 107000000
+      }
+    },
+    {
+      "id": "iCFvB4yywtaHm6d2SdK2",
+      "amount": 425,
+      "bankDetails": null,
+      "createdAt": {
+        "_seconds": 1776603446,
+        "_nanoseconds": 75000000
+      },
+      "creatorEmail": "sidharthbabu96@gmail.com",
+      "creatorId": "hCSrGtHMViYcIT2CfYRhqPk7AF32",
+      "creatorName": "mzx",
+      "currency": "usd",
+      "notes": "Tested withdrawal manually by AI.",
+      "paidAt": {
+        "_seconds": 1777126980,
+        "_nanoseconds": 0
+      },
+      "paymentType": "per_question",
+      "platformFeeAmount": 75,
+      "questionId": "Eoz9yzPUFss0WMnPhpca",
+      "status": "paid",
+      "stripeSessionId": "cs_test_a10DiaSsEE4IuZHBUymnunTNadSvPJ9K1gSI5JXqNv29JbzERf1anmKkLq",
+      "totalPaid": 500
+    }
+  ],
+  "notificationAudit": [
+    {
+      "id": "KKsaCn1ZgX7ohDafBojA",
+      "to": "onboarding@resend.dev",
+      "subject": "Test Logging",
+      "type": "test",
+      "status": "success",
+      "metadata": {
+        "resendId": "2e47eb32-e45b-44e0-97db-007b3cfbbe10"
+      },
+      "env": "test-script",
+      "timestamp": {
+        "_seconds": 1777444751,
+        "_nanoseconds": 727000000
+      }
+    }
+  ]
+}

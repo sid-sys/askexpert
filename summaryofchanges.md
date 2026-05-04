@@ -1,0 +1,25 @@
+# Summary of Changes
+
+## Infrastructure & Rollback
+- **Full Project Reversion**: Performed a complete rollback of the local codebase to the last stable commit (`8f6e632`). This action utilized `git reset --hard` for tracked files and `git clean -fd` for untracked directories, successfully purging experimental features (Asker UI, Chat system) and restoring the platform to its previously hardened production state.
+- **Environment Restoration**: Ran `npm install` to synchronize dependencies and successfully started the local development server on `http://localhost:3000`. Confirmed the home page loads correctly.
+
+## Architecture & Navigation
+- **Settings Consolidation**: Unified "Edit Page," "Pricing," and "Payout" into a single, popover-style "Settings" menu within the bottom navigation bar on mobile (≤900px). This was done to prevent clutter on small screens where too many bottom nav items were getting cut off (specifically on < 500px).
+- **Menu Cleanup**: Removed individual navigation links for the sub-settings to prevent clutter. The active indicator logic was updated so that selecting any sub-setting (Edit/Pricing/Payout) highlights the "Settings" button rather than the profile avatar.
+- **Feedback Integration**: Moved the global "Feedback" trigger into the authenticated User Profile popover menu on the bottom nav, effectively reducing surface-level UI clutter on mobile.
+- **Top Right Navigation for Mobile**: Kept "View Profile" and "Copy Link" buttons in the dashboard's top right header (`NavBar.tsx`) for authenticated users, avoiding burying them inside the `BottomNav` profile menu. This ensures users have immediate access to sharing tools on mobile devices.
+- **Mobile-First Hardening**: Standardized all mobile nav behaviors to use JS-based viewport detection to avoid CSS media-query conflicts within iframes. Fixed NavBar icon-only responsiveness to ensure navigation remains clean on small screens (<500px).
+- **Active State Optimization**: Updated `Sidebar.tsx` and `BottomNav.tsx` to suppress item highlights when the user profile popover is open, ensuring a clean and focused UI.
+- **Profile State Synchronization**: Fixed a bug in `app/profile/page.tsx` where navigating back to the main profile page from a sub-tab (like Pricing) didn't correctly reset the view. The tab now defaults to 'profile' if no URL parameter is present.
+
+## Infrastructure & Maintenance
+- **Storage Retention Policy**: Implemented a new `/api/cron/cleanup-storage` endpoint to automatically purge `asker_attachments/` and `answers/` from Firebase Storage after 7 days.
+- **UX Notices**: Added persistent UI warning banners in `RichComposer.tsx` and `QuestionCard.tsx` informing users of the 7-day file retention policy.
+
+## Key Design Decisions
+- **Settings Over Profile**: Rebranded the "Edit Page" tab on mobile under 500px to "Settings" which behaves as a dropdown containing the edit page, pricing, and payout screens.
+- **Auth Logic**: Authentication actions (Logout/Delete) and Account management (Stripe Billing/Settings) are now strictly contained within the Profile and Settings popover menus on mobile, respectively.
+- **Hydration Fixes**: Shifted away from conditional CSS media queries for layout rendering to avoid React hydration mismatches, favoring `useEffect`-based state management for navigation visibility.
+- **Navigation Clarity**: Renamed "Edit Page" to "Edit Profile" on Sidebar and BottomNav for semantic clarity.
+- **Feedback Mobile Optimization**: Removed the standalone Feedback Floating Action Button (FAB) on mobile screens, instead integrating its toggle logic as a custom event listener that opens via the User Profile popover in the BottomNav.

@@ -1,0 +1,23 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // ── Voice notes from public visitors (no auth required) ──────────────────
+    // Anyone can upload a voice note when asking a question.
+    // Max 10 MB, audio content only. Creators can read their own incoming notes.
+    match /voice-questions/{creatorId}/{fileName} {
+      allow write: if request.resource.size <= 10 * 1024 * 1024
+                   && request.resource.contentType.matches('audio/.*');
+      allow read:  if request.auth != null && request.auth.uid == creatorId;
+    }
+
+    // ── Answer attachments — uploaded by the authenticated creator ────────────
+    // Creator can upload files/voice when responding to a question.
+    // Any authenticated user can read (to allow email-linked answer pages).
+    match /answers/{questionId}/{fileName} {
+      allow write: if request.auth != null
+                   && request.resource.size <= 50 * 1024 * 1024;
+      allow read:  if request.auth != null;
+    }
+  }
+}

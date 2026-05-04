@@ -1,0 +1,170 @@
+import { NextRequest, NextResponse } from "next/server";
+import { stripe } from "@/lib/stripe";
+import { adminDb, FieldValue } from "@/lib/firebase-admin";
+import { sendAskerConfirmationEmail, sendNewQuestionEmail } from "@/lib/resend";
+import { sendPushNotification } from "@/lib/notifications";
+
+export async function GET(req: NextRequest) {
+  const sessionId = req.nextUrl.searchParams.get("session_id");
+  if (!sessionId) {
+    return NextResponse.json({ error: "Missing session_id" }, { status: 400 });
+  }
+
+  try {
+    const session = await stripe.checkout.sessions.retrieve(sessionId);
+    const meta = session.metadata ?? {};
+
+    // ── FALLBACK SYNC ────────────────────────────────────────────────────────
+    // If the session is paid but the question doesn't exist in Firestore,
+    // we create it now. This handles cases where webhooks are delayed or fail.
+    if (session.payment_status === "paid" && meta.questionId) {
+      const qRef = adminDb.collection("questions").doc(meta.questionId);
+      const qSnap = await qRef.get();
+      const qData = qSnap.data();
+
+      // Trigger if question doesn't exist OR it exists but notifications haven't been sent
+      if (!qSnap.exists || !qData?.notificationsSent) {
+        console.log(`🔄 Fallback Sync: Processing question ${meta.questionId} (exists: ${qSnap.exists})`);
+        
+        const {
+          questionId, creatorId, creatorName, followerEmail,
+          content, pricePaid, expiresAt,
+          payoutMethod, feePercent, currency,
+        } = meta as Record<string, string>;
+
+        // Extract attachment URLs from metadata (att0, att1, etc.)
+        const attachmentUrls: string[] = [];
+        for (let i = 0; i < 5; i++) {
+          const att = meta[`att${i}`];
+          if (att) attachmentUrls.push(att);
+        }
+
+        if (!qSnap.exists) {
+          await qRef.set({
+            id:                    questionId,
+            content,
+            response:              null,
+            status:                "PENDING",
+            pricePaid:             parseInt(pricePaid),
+            followerEmail,
+            creatorId,
+            stripePaymentIntentId: session.payment_intent || session.subscription || "",
+            stripeChargeId:        null,
+            stripeSessionId:       session.id,
+            createdAt:             FieldValue.serverTimestamp(),
+            updatedAt:             FieldValue.serverTimestamp(),
+            answeredAt:            null,
+            expiresAt:             new Date(expiresAt),
+            payoutMethod:          payoutMethod ?? "manual_bank",
+            notificationsSent:     false, // Will set to true below
+            attachmentUrls,
+          });
+
+          // Also increment creator total earnings if it's a new question
+          await adminDb.collection("users").doc(creatorId).set(
+            { 
+              totalEarnings: FieldValue.increment(parseInt(pricePaid)),
+              updatedAt: FieldValue.serverTimestamp()
+            },
+            { merge: true }
+          );
+
+          // If manual bank, add to pending payouts
+          if (payoutMethod === "manual_bank") {
+            const grossCents = parseInt(pricePaid);
+            const feeCents   = Math.round(grossCents * (parseFloat(feePercent ?? "15") / 100));
+            const creatorNet = grossCents - feeCents;
+
+            await adminDb.collection("pendingPayouts").add({
+              creatorId,
+              creatorName:     creatorName ?? "",
+              creatorEmail:    followerEmail, // Best effort
+              amount:          creatorNet,
+              platformFeeAmount: feeCents,
+              totalPaid:       grossCents,
+              currency:        currency ?? "usd",
+              questionId,
+              paymentType:     "per_question",
+              status:          "pending",
+              stripeSessionId: session.id,
+              createdAt:       FieldValue.serverTimestamp(),
+              updatedAt:       FieldValue.serverTimestamp(),
+            });
+            await adminDb.collection("users").doc(creatorId).set(
+              { 
+                pendingPayoutBalance: FieldValue.increment(creatorNet),
+                updatedAt: FieldValue.serverTimestamp()
+              },
+              { merge: true }
+            );
+          }
+        }
+
+        // ── 📧 Trigger Notifications ─────────────────────────────────────────
+        console.log(`📣 Triggering notifications for question ${meta.questionId}`);
+
+        try {
+          const creatorSnap = await adminDb.collection("users").doc(meta.creatorId).get();
+          const creatorData = creatorSnap.data();
+
+          // 1. Confirmation email to asker
+          await sendAskerConfirmationEmail({
+            to:          meta.followerEmail,
+            creatorName: meta.creatorName ?? "your expert",
+            question:    meta.content      ?? "",
+            price:       parseInt(meta.pricePaid ?? "0"),
+            expiresAt:   meta.expiresAt,
+            currency:    meta.currency     ?? "usd",
+            responseTimeHours: creatorData?.responseTimeHours || 72,
+          });
+
+          // 2. Notification email to creator
+          if (creatorData?.email) {
+            await sendNewQuestionEmail({
+              to: creatorData.email,
+              creatorName: creatorData.displayName || meta.creatorName || "Creator",
+              question: meta.content || "",
+              askerEmail: meta.followerEmail,
+              price: parseInt(meta.pricePaid ?? "0"),
+              category: meta.category,
+              requestedReplyFormat: meta.requestedReplyFormat,
+              dashboardUrl: `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/dashboard`,
+              responseTimeHours: creatorData?.responseTimeHours || 72,
+              attachmentUrls: qData?.attachmentUrls || attachmentUrls,
+            });
+          }
+
+          // 3. Push notification to creator
+          await sendPushNotification({
+            uid:   meta.creatorId,
+            title: "💰 New Question Paid!",
+            body:  `Someone paid to ask: "${(meta.content ?? "").slice(0, 80)}..."`,
+            link:  "/dashboard",
+          });
+
+          // Mark as sent so we don't repeat on refresh
+          await qRef.update({ notificationsSent: true });
+          console.log(`✅ Notifications marked as sent for question ${meta.questionId}`);
+
+        } catch (err: any) {
+          console.error("⚠️ Fallback notification partially failed:", err.message);
+          // We don't mark notificationsSent as true here, so it can retry on next visit
+        }
+      }
+    }
+
+    // Only expose fields the asker needs — never expose creator email
+    return NextResponse.json({
+      creatorName:  meta.creatorName  ?? "Your Expert",
+      content:      meta.content      ?? "",
+      pricePaid:    meta.pricePaid    ?? "0",
+      currency:     meta.currency     ?? "usd",
+      expiresAt:    meta.expiresAt    ?? null,
+      followerEmail: meta.followerEmail ?? "",
+      responseTimeHours: meta.responseTimeHours ? parseInt(meta.responseTimeHours) : 72,
+    });
+  } catch (err: any) {
+    console.error("❌ Session retrieval error:", err.message);
+    return NextResponse.json({ error: "Session not found" }, { status: 404 });
+  }
+}

@@ -1,0 +1,138 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ─── Helper: is the caller an admin? ────────────────────────────────────
+    // Reads the custom claim set via Firebase Admin SDK on sign-in.
+    function isAdmin() {
+      return request.auth != null && request.auth.token.admin == true;
+    }
+
+    // ─── Helper: is the caller authenticated? ───────────────────────────────
+    function isAuth() {
+      return request.auth != null;
+    }
+
+    // ─── Helper: does the caller own this document? ─────────────────────────
+    function isOwner(uid) {
+      return isAuth() && request.auth.uid == uid;
+    }
+
+    // ════════════════════════════════════════════════════════════════════════
+    // USERS collection
+    //   - Read own profile: owner or admin
+    //   - Read public creator profiles: anyone (needed for [username] page lookup)
+    //   - Write: owner only (admins write via Admin SDK, not client SDK)
+    // ════════════════════════════════════════════════════════════════════════
+    match /users/{userId} {
+      // Anyone can read a user doc — needed to look up creators by username
+      // on public profile pages (/[username])
+      allow read: if true;
+
+      // Only the owner can create/update their own profile
+      allow create: if isOwner(userId);
+      allow update: if isOwner(userId) || isAdmin();
+
+      // No client-side deletes
+      allow delete: if isAdmin();
+    }
+
+    // ════════════════════════════════════════════════════════════════════════
+    // USERNAMES collection  (maps username slug → uid)
+    //   - Public read (needed for username lookup / availability check)
+    //   - Write: only authenticated users (during signup)
+    // ════════════════════════════════════════════════════════════════════════
+    match /usernames/{username} {
+      allow read: if true;
+      allow write: if isAuth();
+    }
+
+    // ════════════════════════════════════════════════════════════════════════
+    // QUESTIONS collection
+    //   - Create: any authenticated user (asker submits question)
+    //   - Read: the creator OR the asker (by email match not enforced here —
+    //           Stripe webhook creates these server-side anyway)
+    //           Admins can read all.
+    //           Public answered questions are read on [username] page.
+    //   - Update: the creator (to answer) OR admin
+    //   - Delete: admin only
+    // ════════════════════════════════════════════════════════════════════════
+    match /questions/{questionId} {
+      // Admins can do anything
+      allow read, write: if isAdmin();
+
+      // Creator can read their own questions
+      // Public can read answered questions that are marked as public
+      allow read: if (isAuth() && (resource == null || resource.data.creatorId == request.auth.uid)) 
+                  || (resource != null && resource.data.isPublicAnswer == true && resource.data.status == "ANSWERED");
+      
+      allow create: if true; // Follower creating a question via Stripe webhook or client
+      allow update: if isAuth() && resource.data.creatorId == request.auth.uid;
+      allow delete: if false;
+    }
+
+    // ════════════════════════════════════════════════════════════════════════
+    // SUBSCRIPTIONS collection
+    //   - Read: the creator or the subscriber (admin can read all)
+    //   - Write: authenticated (Stripe webhook uses Admin SDK anyway)
+    // ════════════════════════════════════════════════════════════════════════
+    match /subscriptions/{subId} {
+      allow read: if isAdmin()
+                  || (isAuth() && (resource.data.creatorId == request.auth.uid
+                                   || resource.data.followerId == request.auth.uid));
+      allow write: if isAuth() || isAdmin();
+    }
+
+    // ════════════════════════════════════════════════════════════════════════
+    // REVIEWS collection
+    //   - Anyone can create a review (public askers leave reviews)
+    //   - Anyone can read reviews (shown on public creator profiles)
+    //   - Only creator can delete their own reviews
+    // ════════════════════════════════════════════════════════════════════════
+    match /reviews/{reviewId} {
+      allow read: if true;
+      allow create: if true;
+      allow delete: if isAuth() && resource.data.creatorId == request.auth.uid;
+      allow update: if false;
+    }
+
+    // ════════════════════════════════════════════════════════════════════════
+    // PROCESSED EVENTS collection (Stripe webhook idempotency store)
+    //   - Written only by server-side Admin SDK (bypasses rules)
+    //   - No client access ever
+    // ════════════════════════════════════════════════════════════════════════
+    match /processedEvents/{eventId} {
+      allow read, write: if false;
+    }
+
+    // ════════════════════════════════════════════════════════════════════════
+    // PENDING_PAYOUTS collection
+    //   - Read: creator can see their own payout history
+    //   - Write: admin only
+    // ════════════════════════════════════════════════════════════════════════
+    match /pendingPayouts/{payoutId} {
+      allow read: if isAdmin() || (isAuth() && resource.data.creatorId == request.auth.uid);
+      allow write: if isAdmin();
+    }
+
+    // ════════════════════════════════════════════════════════════════════════
+    // VACATION_SUBSCRIPTIONS collection
+    //   - Read: creator can see their own leads
+    //   - Create: anyone can sign up for notifications
+    //   - Update: only admin or server-side (converted/notified status)
+    // ════════════════════════════════════════════════════════════════════════
+    match /vacation_subscriptions/{subId} {
+      allow read: if isAuth() && resource.data.creatorId == request.auth.uid;
+      allow create: if true;
+      allow update, delete: if isAdmin();
+    }
+
+    // ════════════════════════════════════════════════════════════════════════
+    // Default: deny everything else
+    // ════════════════════════════════════════════════════════════════════════
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
