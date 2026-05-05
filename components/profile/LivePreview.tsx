@@ -91,7 +91,7 @@ export default function LivePreview({ iframeRef, username, pushPreview }: LivePr
           animation: "pulse 1.5s infinite",
         }} />
         <span style={{ color: "#fff", fontSize: "0.7rem", fontWeight: 700, letterSpacing: "0.04em" }}>
-          Updates as you type — no save needed
+          Reflects after saving — public profile updates instantly
         </span>
       </div>
 

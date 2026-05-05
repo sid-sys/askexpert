@@ -55,6 +55,61 @@ const CURRENCY_SYMBOLS: Record<string, string> = {
   sgd: "S$",
 };
 
+function SaveButton({ saving, saved, onClick }: { saving: boolean; saved: boolean; onClick: () => Promise<void> }) {
+  return (
+    <div style={{ marginTop: 32, display: "flex", alignItems: "center", gap: 16 }}>
+      <button
+        onClick={onClick}
+        disabled={saving}
+        style={{
+          display: "inline-flex", alignItems: "center", gap: 10,
+          padding: "13px 36px",
+          background: saved
+            ? "linear-gradient(135deg, #059669, #10b981)"
+            : "linear-gradient(135deg, #7c3aed, #a855f7)",
+          color: "#fff",
+          border: "none",
+          borderRadius: 14,
+          fontFamily: "'Outfit', sans-serif",
+          fontWeight: 800,
+          fontSize: "0.95rem",
+          cursor: saving ? "wait" : "pointer",
+          boxShadow: saved
+            ? "0 4px 14px rgba(5,150,105,0.3)"
+            : "0 4px 14px rgba(124,58,237,0.3)",
+          transition: "all 0.22s cubic-bezier(0.4,0,0.2,1)",
+          opacity: saving ? 0.8 : 1,
+          letterSpacing: "-0.01em",
+        }}
+        onMouseEnter={e => { if (!saving) (e.currentTarget as HTMLButtonElement).style.transform = "translateY(-1px)"; }}
+        onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.transform = ""; }}
+      >
+        {saving ? (
+          <>
+            <span style={{ width: 16, height: 16, border: "2px solid rgba(255,255,255,0.4)", borderTopColor: "#fff", borderRadius: "50%", animation: "spin 0.7s linear infinite", display: "inline-block", flexShrink: 0 }} />
+            Saving…
+          </>
+        ) : saved ? (
+          <>
+            <svg width="17" height="17" fill="none" viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+            Saved!
+          </>
+        ) : (
+          <>
+            <svg width="17" height="17" fill="none" viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" stroke="#fff" strokeWidth="2" strokeLinejoin="round"/><polyline points="17 21 17 13 7 13 7 21" stroke="#fff" strokeWidth="2" strokeLinejoin="round"/><polyline points="7 3 7 8 15 8" stroke="#fff" strokeWidth="2" strokeLinejoin="round"/></svg>
+            Save Changes
+          </>
+        )}
+      </button>
+      {saved && (
+        <span style={{ fontFamily: "'Outfit', sans-serif", fontSize: "0.82rem", fontWeight: 600, color: "#059669" }}>
+          ✓ All changes saved
+        </span>
+      )}
+    </div>
+  );
+}
+
 function SettingsContent() {
   const { user, userProfile, loading, refreshProfile } = useAuth();
   const router       = useRouter();
@@ -89,7 +144,7 @@ function SettingsContent() {
     vacationMode, setVacationMode,
     vacationUntil, setVacationUntil,
     vacationMessage, setVacationMessage,
-    saving, saved
+    saving, saved, saveNow
   } = useProfileSettings();
 
   const [tab, setTab] = useState<Tab>("profile");
@@ -135,6 +190,15 @@ function SettingsContent() {
   }, [displayName, tagline, bio, categories, responseFormats, socialLinks, perQ, monthly, responseTimeHours, subscriberPerks, pppEnabled]);
 
   useEffect(() => { pushPreview(); }, [pushPreview]);
+
+  // ── save + refresh preview ────────────────────────────────────────────────
+  const handleSave = useCallback(async () => {
+    await saveNow();
+    if (iframeRef.current && userProfile?.username) {
+      // Reload iframe to fetch freshly-saved Firestore data, onLoad re-applies overlay
+      iframeRef.current.src = `/${userProfile.username}`;
+    }
+  }, [saveNow, userProfile?.username]);
 
   useEffect(() => {
     gsap.fromTo(".settings-layout", 
@@ -251,23 +315,6 @@ function SettingsContent() {
       {/* Onboarding Tour disabled by user request */}
       {/* <OnboardingTour userId={user?.uid} /> */}
       
-      {/* ── AUTO-SAVE STATUS ── */}
-      {(saving || saved) && (
-        <div className="status-bubble-container" style={{
-          position: "fixed", bottom: 40, left: "50%", transform: "translateX(-50%)", zIndex: 1000,
-          background: saved ? "#10b981" : "#7c3aed", color: "#fff",
-          padding: "10px 24px", borderRadius: 14, fontSize: "0.9rem", fontWeight: 800,
-          boxShadow: "0 10px 30px rgba(0,0,0,0.15)", display: "flex", alignItems: "center", gap: 12,
-          border: "2px solid rgba(255,255,255,0.2)", animation: "animate__animated animate__fadeInUp"
-        }}>
-          {saving ? (
-            <>
-              <div className="spinner-mini" style={{ width: 16, height: 16, border: "2px solid #fff", borderTopColor: "transparent", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
-              Saving changes...
-            </>
-          ) : <>✨ Changes Saved</>}
-        </div>
-      )}
 
       {/* ── HEADER ── */}
       <div className="settings-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 32, flexWrap: "wrap", gap: 12 }}>
@@ -275,11 +322,7 @@ function SettingsContent() {
           <h1 style={{ fontFamily: "'Outfit', sans-serif", fontSize: "clamp(1.8rem, 3vw, 2.4rem)", fontWeight: 800, color: "#1f2937", marginBottom: 6, textTransform: "capitalize" }}>
             Settings
           </h1>
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <p style={{ color: "var(--muted)", margin: 0 }}>Manage your public profile</p>
-            {saving && <span style={{ fontSize: "0.75rem", color: "var(--purple)", fontWeight: 700, animation: "pulse 1s infinite" }}>⏳ Saving...</span>}
-            {saved && <span style={{ fontSize: "0.75rem", color: "var(--green)", fontWeight: 700 }}>✅ All changes saved</span>}
-          </div>
+          <p style={{ color: "var(--muted)", margin: 0 }}>Manage your public profile</p>
         </div>
         <button
           id="btn-preview-toggle"
@@ -302,58 +345,67 @@ function SettingsContent() {
         <div style={{ flex: 1, minWidth: 0 }}>
 
           {tab === "profile" && (
-            <ProfileTab 
-              displayName={displayName} setDisplayName={setDisplayName}
-              tagline={tagline} setTagline={setTagline}
-              bio={bio} setBio={setBio}
-              newUsername={newUsername} setNewUsername={setNewUsername}
-              usernameStatus={usernameStatus} handleSave={confirmUsername}
-              saving={saving} saved={saved} userProfile={userProfile}
-              socialLinks={socialLinks} setSocialLinks={setSocialLinks}
-              categories={categories} toggleCategory={toggleCategory}
-              vacationMode={vacationMode} setVacationMode={setVacationMode}
-              vacationUntil={vacationUntil} setVacationUntil={setVacationUntil}
-              vacationMessage={vacationMessage} setVacationMessage={setVacationMessage}
-              ALL_CATEGORIES={ALL_CATEGORIES}
-            />
+            <>
+              <ProfileTab
+                displayName={displayName} setDisplayName={setDisplayName}
+                tagline={tagline} setTagline={setTagline}
+                bio={bio} setBio={setBio}
+                newUsername={newUsername} setNewUsername={setNewUsername}
+                usernameStatus={usernameStatus} handleSave={confirmUsername}
+                saving={saving} saved={saved} userProfile={userProfile}
+                socialLinks={socialLinks} setSocialLinks={setSocialLinks}
+                categories={categories} toggleCategory={toggleCategory}
+                vacationMode={vacationMode} setVacationMode={setVacationMode}
+                vacationUntil={vacationUntil} setVacationUntil={setVacationUntil}
+                vacationMessage={vacationMessage} setVacationMessage={setVacationMessage}
+                ALL_CATEGORIES={ALL_CATEGORIES}
+              />
+              <SaveButton saving={saving} saved={saved} onClick={handleSave} />
+            </>
           )}
 
           {tab === "pricing" && (
-            <PricingTab 
-              currency={currency} setCurrency={setCurrency}
-              perQ={perQ} setPerQ={setPerQ}
-              monthly={monthly} setMonthly={setMonthly}
-              CURRENCY_SYMBOLS={CURRENCY_SYMBOLS}
-              feePercent={feePercent} creatorKeepsPct={creatorKeepsPct}
-              platformPlan={platformPlan} pppEnabled={pppEnabled}
-              setPppEnabled={setPppEnabled} subscriberPerks={subscriberPerks}
-              setSubscriberPerks={setSubscriberPerks} newPerk={newPerk}
-              setNewPerk={setNewPerk} addPerk={addPerk} removePerk={removePerk}
-              PERK_TEMPLATES={PERK_TEMPLATES} responseTimeHours={responseTimeHours}
-              setResponseTimeHours={setResponseTimeHours}
-              RESPONSE_TIME_OPTIONS={RESPONSE_TIME_OPTIONS}
-            />
+            <>
+              <PricingTab
+                currency={currency} setCurrency={setCurrency}
+                perQ={perQ} setPerQ={setPerQ}
+                monthly={monthly} setMonthly={setMonthly}
+                CURRENCY_SYMBOLS={CURRENCY_SYMBOLS}
+                feePercent={feePercent} creatorKeepsPct={creatorKeepsPct}
+                platformPlan={platformPlan} pppEnabled={pppEnabled}
+                setPppEnabled={setPppEnabled} subscriberPerks={subscriberPerks}
+                setSubscriberPerks={setSubscriberPerks} newPerk={newPerk}
+                setNewPerk={setNewPerk} addPerk={addPerk} removePerk={removePerk}
+                PERK_TEMPLATES={PERK_TEMPLATES} responseTimeHours={responseTimeHours}
+                setResponseTimeHours={setResponseTimeHours}
+                RESPONSE_TIME_OPTIONS={RESPONSE_TIME_OPTIONS}
+              />
+              <SaveButton saving={saving} saved={saved} onClick={handleSave} />
+            </>
           )}
 
           {tab === "payout" && (
-            <PayoutTab 
-              platformPlan={platformPlan} portalLoading={portalLoading}
-              handleManagePlan={handleManagePlan} pendingBalance={pendingBalance}
-              totalEarnings={totalEarnings} payoutMethod={payoutMethod}
-              setPayoutMethod={setPayoutMethod} userProfile={userProfile}
-              handlePayoutSetup={handlePayoutSetup} stripeLoading={stripeLoading}
-              accountHolder={accountHolder} setAccountHolder={setAccountHolder}
-              bankName={bankName} setBankName={setBankName}
-              accountNumber={accountNumber} setAccountNumber={setAccountNumber}
-              bankCountry={bankCountry} setBankCountry={setBankCountry}
-              ifscCode={ifscCode} setIfscCode={setIfscCode}
-              swiftCode={swiftCode} setSwiftCode={setSwiftCode}
-              paypalEmail={paypalEmail} setPaypalEmail={setPaypalEmail}
-              wiseEmail={wiseEmail} setWiseEmail={setWiseEmail}
-              payoutUnlocked={payoutUnlocked}
-              earningsFormatted={earningsFormatted}
-              progressPct={progressPct}
-            />
+            <>
+              <PayoutTab
+                platformPlan={platformPlan} portalLoading={portalLoading}
+                handleManagePlan={handleManagePlan} pendingBalance={pendingBalance}
+                totalEarnings={totalEarnings} payoutMethod={payoutMethod}
+                setPayoutMethod={setPayoutMethod} userProfile={userProfile}
+                handlePayoutSetup={handlePayoutSetup} stripeLoading={stripeLoading}
+                accountHolder={accountHolder} setAccountHolder={setAccountHolder}
+                bankName={bankName} setBankName={setBankName}
+                accountNumber={accountNumber} setAccountNumber={setAccountNumber}
+                bankCountry={bankCountry} setBankCountry={setBankCountry}
+                ifscCode={ifscCode} setIfscCode={setIfscCode}
+                swiftCode={swiftCode} setSwiftCode={setSwiftCode}
+                paypalEmail={paypalEmail} setPaypalEmail={setPaypalEmail}
+                wiseEmail={wiseEmail} setWiseEmail={setWiseEmail}
+                payoutUnlocked={payoutUnlocked}
+                earningsFormatted={earningsFormatted}
+                progressPct={progressPct}
+              />
+              <SaveButton saving={saving} saved={saved} onClick={handleSave} />
+            </>
           )}
         </div>
 

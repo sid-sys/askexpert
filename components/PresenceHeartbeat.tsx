@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import { useAuth } from "@/context/AuthContext";
-import { doc, updateDoc, serverTimestamp } from "firebase/firestore";
+import { doc, setDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { COLLECTIONS } from "@/lib/types";
 
@@ -16,10 +16,10 @@ export default function PresenceHeartbeat() {
     const updatePresence = async (status: boolean) => {
       try {
         const userRef = doc(db, COLLECTIONS.USERS, user.uid);
-        await updateDoc(userRef, {
+        await setDoc(userRef, {
           isOnline: status,
           lastSeen: serverTimestamp(),
-        });
+        }, { merge: true });
       } catch (err) {
         console.error("Presence update failed:", err);
       }

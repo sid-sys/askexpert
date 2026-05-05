@@ -159,7 +159,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         bio: "",
         photoURL: u.photoURL || "",
         isCreator: isAdminEmail ? true : false,
-        isAdmin: isAdminEmail ? true : undefined,
+        isAdmin: isAdminEmail ? true : false,
         stripeAccountId: null,
         stripeOnboardingComplete: false,
         perQuestionPrice: 500,

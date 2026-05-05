@@ -37,10 +37,6 @@ function AuthForm() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [verificationSent, setVerificationSent] = useState(false);
-  const [role, setRole] = useState<"creator" | "fan">(
-    searchParams.get("role") === "fan" ? "fan" : "creator"
-  );
-  const [creatorUrl, setCreatorUrl] = useState("");
 
   // Read ?plan= from URL ("creator" | "pro" | null)
   const selectedPlan = searchParams.get("plan")?.toLowerCase() ?? "";
@@ -64,14 +60,18 @@ function AuthForm() {
     }
   };
 
-  const redirectPath = searchParams.get("redirect") || "/dashboard";
+  const customRedirect = searchParams.get("redirect");
 
-  const { signInWithGoogle, signInWithEmail, signUpWithEmail, sendPasswordReset, user } = useAuth();
+  const { signInWithGoogle, signInWithEmail, signUpWithEmail, sendPasswordReset, user, userProfile } = useAuth();
   const router = useRouter();
 
+  // Redirect already-logged-in users, waiting for userProfile so we know their role
   useEffect(() => {
-    if (user) router.push(redirectPath);
-  }, [user, router, redirectPath]);
+    if (!user || !userProfile || verificationSent) return;
+    router.push(customRedirect || "/dashboard");
+  }, [user, userProfile, verificationSent, router, customRedirect]);
+
+  const redirectAfterAuth = () => router.push(customRedirect || "/dashboard");
 
   // ── Login ────────────────────────────────────────────────────────────────
   const handleLogin = async (e: React.FormEvent) => {
@@ -79,7 +79,7 @@ function AuthForm() {
     setError(""); setLoading(true);
     try {
       await signInWithEmail(email, password);
-      router.push(redirectPath);
+      await redirectAfterAuth();
     } catch (err: unknown) {
       setError(friendlyError(err));
     } finally { setLoading(false); }
@@ -99,13 +99,12 @@ function AuthForm() {
     setLoading(true);
     try {
       await signUpWithEmail(email, password, username.trim().toLowerCase());
-      if (selectedPlan && PAID_PLANS.includes(selectedPlan)) {
-        const firebaseModule = await import("@/lib/firebase");
-        const u = firebaseModule.auth.currentUser;
-        if (u) {
-          await redirectToPlanCheckout(u.uid, email, selectedPlan);
-          return;
-        }
+      const { auth: fbAuth } = await import("@/lib/firebase");
+      const u = fbAuth.currentUser;
+
+      if (selectedPlan && PAID_PLANS.includes(selectedPlan) && u) {
+        await redirectToPlanCheckout(u.uid, email, selectedPlan);
+        return;
       }
       setVerificationSent(true);
     } catch (err: unknown) {
@@ -130,31 +129,16 @@ function AuthForm() {
     setError(""); setLoading(true);
     try {
       await signInWithGoogle();
-      const firebaseModule = await import("@/lib/firebase");
-      const u = firebaseModule.auth.currentUser;
+      const { auth: fbAuth } = await import("@/lib/firebase");
+      const u = fbAuth.currentUser;
       if (u && selectedPlan && PAID_PLANS.includes(selectedPlan)) {
         await redirectToPlanCheckout(u.uid, u.email ?? "", selectedPlan);
       } else {
-        router.push(redirectPath);
+        await redirectAfterAuth();
       }
     } catch (err: unknown) {
       setError(friendlyError(err));
     } finally { setLoading(false); }
-  };
-
-  const handleFanContinue = (e: React.FormEvent) => {
-    e.preventDefault();
-    setError("");
-    const raw = creatorUrl.trim();
-    if (!raw) { setError("Please enter a creator's profile URL"); return; }
-    try {
-      const path = raw.startsWith("http")
-        ? new URL(raw).pathname
-        : raw.startsWith("/") ? raw : `/${raw}`;
-      router.push(path);
-    } catch {
-      setError("Invalid URL. Try: http://localhost:3000/username");
-    }
   };
 
   const goTo = (v: View) => {
@@ -221,7 +205,7 @@ function AuthForm() {
             {view === "login"
               ? "Welcome back — sign in to your account"
               : view === "signup"
-              ? (role === "fan" ? "Follow your favourite creators — get expert answers" : "Join AskExpert — start monetising your knowledge")
+              ? "Join AskExpert — start monetising your knowledge"
               : "Reset your password"}
           </p>
         </div>
@@ -262,36 +246,8 @@ function AuthForm() {
             </div>
           )}
 
-          {/* ── Role Selector (signup only) ── */}
-          {view === "signup" && (
-            <div style={{ marginBottom: 20 }}>
-              <p style={{ color: "#6b7280", fontSize: "0.75rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 8 }}>
-                I want to...
-              </p>
-              <div style={{ display: "flex", gap: 8 }}>
-                {(["creator", "fan"] as const).map((r) => (
-                  <button
-                    key={r}
-                    type="button"
-                    onClick={() => { setRole(r); setError(""); }}
-                    style={{
-                      flex: 1, padding: "12px 0", borderRadius: 10,
-                      border: role === r ? "2px solid #7c3aed" : "1.5px solid #e5e7eb",
-                      fontWeight: 700, fontSize: "0.88rem", cursor: "pointer",
-                      background: role === r ? "#faf5ff" : "#fff",
-                      color: role === r ? "#7c3aed" : "#6b7280",
-                      transition: "all 0.15s",
-                    }}
-                  >
-                    {r === "creator" ? "🎓 Monetise my expertise" : "🎯 Ask an expert"}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
           {/* ── Google ── */}
-          {view !== "forgot" && !(view === "signup" && role === "fan") && (
+          {view !== "forgot" && (
             <>
               <button onClick={handleGoogle} disabled={loading} style={btnGoogle}>
                 <svg width="18" height="18" viewBox="0 0 48 48">
@@ -340,8 +296,8 @@ function AuthForm() {
             </form>
           )}
 
-          {/* ════════════════ SIGNUP FORM (Creator) ════════════════ */}
-          {view === "signup" && role === "creator" && (
+          {/* ════════════════ SIGNUP FORM ════════════════ */}
+          {view === "signup" && (
             <form onSubmit={handleSignUp} style={formWrap}>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
                 <Field label="Username">
@@ -410,35 +366,6 @@ function AuthForm() {
               </button>
               <p style={{ color: "#9ca3af", fontSize: "0.72rem", textAlign: "center" }}>
                 By signing up you agree to our Terms of Service and Privacy Policy.
-              </p>
-            </form>
-          )}
-
-          {/* ════════════════ SIGNUP FORM (Fan) ════════════════ */}
-          {view === "signup" && role === "fan" && (
-            <form onSubmit={handleFanContinue} style={formWrap}>
-              <div style={{ textAlign: "center", padding: "8px 0 4px" }}>
-                <div style={{ fontSize: "2.5rem", marginBottom: 10 }}>🔍</div>
-                <p style={{ color: "#6b7280", fontSize: "0.92rem", lineHeight: 1.65, margin: 0 }}>
-                  Enter your creator&apos;s profile URL. You&apos;ll sign up and subscribe directly from their page.
-                </p>
-              </div>
-              <Field label="Creator's Profile URL">
-                <input
-                  className="input-brutal"
-                  type="text"
-                  placeholder="http://localhost:3000/username"
-                  value={creatorUrl}
-                  onChange={(e) => { setCreatorUrl(e.target.value); setError(""); }}
-                  required
-                />
-              </Field>
-              {error && <ErrorBox msg={error} />}
-              <button type="submit" style={btnPurple}>
-                Go to Creator&apos;s Page →
-              </button>
-              <p style={{ color: "#9ca3af", fontSize: "0.75rem", textAlign: "center", margin: 0 }}>
-                You can create your account and subscribe from the creator&apos;s page.
               </p>
             </form>
           )}

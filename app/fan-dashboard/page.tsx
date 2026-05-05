@@ -22,270 +22,547 @@ type Question = {
   response?: string;
   createdAt: Date;
   creatorId: string;
+  creatorUsername?: string;
 };
 
+type NavId = "home" | "discover" | "subscriptions" | "questions" | "settings";
+
+const NAV: { id: NavId; label: string; icon: React.ReactElement }[] = [
+  {
+    id: "home", label: "Home",
+    icon: <svg width="18" height="18" fill="none" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5" fill="currentColor"/><rect x="14" y="3" width="7" height="7" rx="1.5" fill="currentColor"/><rect x="3" y="14" width="7" height="7" rx="1.5" fill="currentColor"/><rect x="14" y="14" width="7" height="7" rx="1.5" fill="currentColor"/></svg>,
+  },
+  {
+    id: "discover", label: "Discover",
+    icon: <svg width="18" height="18" fill="none" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2"/><path d="M17 17l4 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>,
+  },
+  {
+    id: "subscriptions", label: "Subscriptions",
+    icon: <svg width="18" height="18" fill="none" viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" stroke="currentColor" strokeWidth="2" strokeLinejoin="round"/></svg>,
+  },
+  {
+    id: "questions", label: "My Questions",
+    icon: <svg width="18" height="18" fill="none" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round"/></svg>,
+  },
+  {
+    id: "settings", label: "Settings",
+    icon: <svg width="18" height="18" fill="none" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="2"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" stroke="currentColor" strokeWidth="2"/></svg>,
+  },
+];
+
 export default function FanDashboardPage() {
-  const { user, userProfile } = useAuth();
+  const { user, userProfile, logout } = useAuth();
   const router = useRouter();
+  const [activeNav, setActiveNav] = useState<NavId>("home");
+  const [creatorUrl, setCreatorUrl] = useState("");
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [questions, setQuestions] = useState<Question[]>([]);
   const [loading, setLoading] = useState(true);
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [activeQFilter, setActiveQFilter] = useState<"ALL" | "PENDING" | "ANSWERED">("ALL");
 
   useEffect(() => {
-    if (user === null) {
-      router.push("/auth?redirect=/fan-dashboard");
-    }
+    if (user === null) router.push("/auth?redirect=/fan-dashboard");
   }, [user, router]);
 
   useEffect(() => {
     if (!user) return;
-
-    const fetchData = async () => {
+    const run = async () => {
       setLoading(true);
       try {
-        // Fetch active subscriptions
         const subSnap = await getDocs(
-          query(
-            collection(db, COLLECTIONS.SUBSCRIPTIONS),
-            where("followerId", "==", user.uid),
-            where("status", "==", "active")
-          )
+          query(collection(db, COLLECTIONS.SUBSCRIPTIONS), where("followerId", "==", user.uid), where("status", "==", "active"))
         );
-
-        const rawSubs = subSnap.docs.map((d) => ({ id: d.id, ...d.data() } as Subscription));
-
-        // Enrich each subscription with creator username/name
-        const enriched = await Promise.all(
-          rawSubs.map(async (sub) => {
-            try {
-              const creatorSnap = await getDocs(
-                query(collection(db, COLLECTIONS.USERS), where("uid", "==", sub.creatorId))
-              );
-              if (!creatorSnap.empty) {
-                const cd = creatorSnap.docs[0].data();
-                return { ...sub, creatorUsername: cd.username, creatorName: cd.displayName };
-              }
-            } catch {
-              // silently ignore lookup failures
+        const raw = subSnap.docs.map((d) => ({ id: d.id, ...d.data() } as Subscription));
+        const enriched = await Promise.all(raw.map(async (sub) => {
+          try {
+            const snap = await getDocs(query(collection(db, COLLECTIONS.USERS), where("uid", "==", sub.creatorId)));
+            if (!snap.empty) {
+              const cd = snap.docs[0].data();
+              return { ...sub, creatorUsername: cd.username, creatorName: cd.displayName };
             }
-            return sub;
-          })
-        );
+          } catch { /* ignore */ }
+          return sub;
+        }));
         setSubscriptions(enriched);
 
-        // Fetch questions asked by this fan
-        const qSnap = await getDocs(
-          query(collection(db, COLLECTIONS.QUESTIONS), where("followerUid", "==", user.uid))
-        );
-        const qs = qSnap.docs
-          .map((d) => {
+        const qSnap = await getDocs(query(collection(db, COLLECTIONS.QUESTIONS), where("followerUid", "==", user.uid)));
+        const creatorIds = [...new Set(qSnap.docs.map((d) => d.data().creatorId).filter(Boolean))];
+        const cm: Record<string, string> = {};
+        await Promise.all(creatorIds.map(async (cid) => {
+          try {
+            const snap = await getDocs(query(collection(db, COLLECTIONS.USERS), where("uid", "==", cid)));
+            if (!snap.empty) cm[cid] = snap.docs[0].data().username;
+          } catch { /* ignore */ }
+        }));
+        setQuestions(
+          qSnap.docs.map((d) => {
             const data = d.data();
-            return {
-              id: d.id,
-              content: data.content || "",
-              status: data.status || "PENDING",
-              response: data.response || "",
-              createdAt: data.createdAt?.toDate?.() ?? new Date(),
-              creatorId: data.creatorId || "",
-            } as Question;
-          })
-          .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-        setQuestions(qs);
-      } catch (err) {
-        console.error("Fan dashboard fetch error:", err);
-      } finally {
-        setLoading(false);
-      }
+            return { id: d.id, content: data.content || "", status: data.status || "PENDING", response: data.response || "", createdAt: data.createdAt?.toDate?.() ?? new Date(), creatorId: data.creatorId || "", creatorUsername: cm[data.creatorId] || "" } as Question;
+          }).sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+        );
+      } catch (err) { console.error("Fan dashboard:", err); }
+      finally { setLoading(false); }
     };
-
-    fetchData();
+    run();
   }, [user]);
+
+  const go = (nav: NavId) => { setActiveNav(nav); setMobileOpen(false); };
+  const handleFindCreator = (e: React.FormEvent) => {
+    e.preventDefault();
+    const raw = creatorUrl.trim(); if (!raw) return;
+    try { router.push(raw.startsWith("http") ? new URL(raw).pathname : raw.startsWith("/") ? raw : `/${raw}`); } catch { /* ignore */ }
+  };
+  const handleLogout = async () => { await logout(); router.push("/"); };
 
   if (!user) return null;
 
-  const displayName = (userProfile as any)?.displayName || user.email || "Fan";
+  const displayName = userProfile?.displayName || user.email?.split("@")[0] || "Fan";
+  const username = userProfile?.username || "";
+  const initial = (userProfile?.displayName || userProfile?.username || "F")[0].toUpperCase();
+  const answeredCount = questions.filter((q) => q.status === "ANSWERED").length;
+  const pendingCount  = questions.filter((q) => q.status === "PENDING").length;
 
-  return (
-    <div style={{ minHeight: "100vh", background: "#fafafa", paddingBottom: 80 }}>
-      {/* Nav */}
-      <nav style={{
-        background: "#fff", borderBottom: "1px solid #e5e7eb",
-        padding: "0 24px", height: 60,
-        display: "flex", alignItems: "center", justifyContent: "space-between",
-        position: "sticky", top: 0, zIndex: 100,
-        boxShadow: "0 2px 12px rgba(0,0,0,0.04)",
-      }}>
-        <a href="/" style={{
-          fontFamily: "'Syne', sans-serif", fontWeight: 800, fontSize: "1.2rem",
-          background: "linear-gradient(135deg, #7c3aed, #a855f7)",
-          WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent",
-          textDecoration: "none",
-        }}>
-          AskExpert
-        </a>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <span style={{ color: "#6b7280", fontSize: "0.85rem" }}>
-            Hi, {displayName} 👋
-          </span>
-          <a href="/auth" style={{
-            background: "linear-gradient(135deg, #7c3aed, #a855f7)",
-            color: "#fff", borderRadius: 99, padding: "6px 14px",
-            fontSize: "0.78rem", fontWeight: 700, textDecoration: "none",
+  const sidebarNav = (
+    <nav style={{ flex: 1, padding: "10px", display: "flex", flexDirection: "column", gap: 2, overflowY: "auto" }}>
+      <p style={{ fontFamily: "'Outfit',sans-serif", fontSize: "0.58rem", fontWeight: 800, letterSpacing: "0.18em", color: "rgba(167,139,250,0.45)", textTransform: "uppercase", margin: "14px 0 4px 8px" }}>FAN</p>
+      {NAV.map((item) => {
+        const active = activeNav === item.id;
+        return (
+          <button key={item.id} onClick={() => go(item.id)} style={{
+            display: "flex", alignItems: "center", gap: 10,
+            padding: "9px 12px", borderRadius: 9, border: "none", width: "100%", textAlign: "left",
+            background: active ? "#8036EB" : "transparent",
+            color: active ? "#fff" : "rgba(161,161,170,0.8)",
+            fontFamily: "'Outfit',sans-serif", fontWeight: active ? 700 : 500, fontSize: "0.88rem",
+            cursor: "pointer", transition: "all 0.18s", marginBottom: 2,
           }}>
-            Sign Out
-          </a>
+            <span style={{ width: 20, height: 20, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{item.icon}</span>
+            {item.label}
+          </button>
+        );
+      })}
+
+    </nav>
+  );
+
+  const sidebarFooter = (
+    <div style={{ padding: "12px 10px 20px", borderTop: "1px solid rgba(167,139,250,0.08)", display: "flex", flexDirection: "column", gap: 8 }}>
+      {/* Creator / Fan toggle */}
+      <div style={{ display: "flex", background: "rgba(255,255,255,0.06)", borderRadius: 10, padding: 3, gap: 3 }}>
+        {([{ label: "Creator", href: "/dashboard" }, { label: "Fan", href: "/fan-dashboard" }] as const).map(({ label, href }) => {
+          const active = label === "Fan";
+          return (
+            <button key={label} onClick={() => router.push(href)} style={{
+              flex: 1, padding: "7px 0", borderRadius: 8, border: "none",
+              fontFamily: "'Outfit',sans-serif", fontWeight: 700, fontSize: "0.78rem",
+              cursor: active ? "default" : "pointer",
+              background: active ? "#8036EB" : "transparent",
+              color: active ? "#fff" : "rgba(161,161,170,0.6)",
+              transition: "all 0.18s",
+            }}>
+              {label}
+            </button>
+          );
+        })}
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 10px", borderRadius: 10, background: "rgba(167,139,250,0.05)", border: "1px solid rgba(167,139,250,0.08)" }}>
+        <div style={{ width: 34, height: 34, borderRadius: "50%", background: "linear-gradient(135deg,#7c3aed,#a855f7)", color: "#fff", display: "grid", placeItems: "center", fontFamily: "'Outfit',sans-serif", fontSize: "0.85rem", fontWeight: 800, flexShrink: 0 }}>
+          {initial}
         </div>
-      </nav>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: "0.8rem", fontWeight: 700, color: "#e4e4e7", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 130 }}>{displayName}</div>
+          {username && <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: "0.65rem", color: "rgba(167,139,250,0.55)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 130 }}>@{username}</div>}
+        </div>
+      </div>
+      <button onClick={handleLogout} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", borderRadius: 9, border: "1px solid rgba(255,255,255,0.05)", background: "transparent", color: "rgba(161,161,170,0.55)", fontFamily: "'Outfit',sans-serif", fontSize: "0.82rem", fontWeight: 500, cursor: "pointer", width: "100%", textAlign: "left", transition: "all 0.18s" }}
+        onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = "rgba(239,68,68,0.08)"; (e.currentTarget as HTMLButtonElement).style.color = "#fca5a5"; }}
+        onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = "transparent"; (e.currentTarget as HTMLButtonElement).style.color = "rgba(161,161,170,0.55)"; }}
+      >
+        <svg width="18" height="18" fill="none" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+        Sign out
+      </button>
+    </div>
+  );
 
-      <div style={{ maxWidth: 720, margin: "0 auto", padding: "40px 24px" }}>
-        <h1 style={{
-          fontFamily: "'Syne', sans-serif", fontWeight: 800,
-          fontSize: "2rem", color: "#111827", marginBottom: 6,
-        }}>
-          Fan Dashboard
-        </h1>
-        <p style={{ color: "#6b7280", marginBottom: 40, fontSize: "0.95rem" }}>
-          Your subscriptions and question history.
-        </p>
-
-        {loading ? (
-          <div style={{ textAlign: "center", color: "#9ca3af", padding: 60, fontSize: "1.1rem" }}>
-            Loading…
-          </div>
-        ) : (
-          <>
-            {/* ── Subscriptions ── */}
-            <section style={{ marginBottom: 48 }}>
-              <h2 style={{
-                fontSize: "0.75rem", fontWeight: 800, color: "#374151",
-                textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 16,
-              }}>
-                🌟 My Subscriptions
-              </h2>
-
-              {subscriptions.length === 0 ? (
-                <div style={{
-                  background: "#fff", border: "1px solid #e5e7eb",
-                  borderRadius: 16, padding: "40px 32px", textAlign: "center",
-                }}>
-                  <div style={{ fontSize: "2.5rem", marginBottom: 12 }}>🔍</div>
-                  <p style={{ color: "#6b7280", marginBottom: 20, fontSize: "0.95rem" }}>
-                    No active subscriptions yet.
-                  </p>
-                  <a href="/" style={{
-                    display: "inline-block",
-                    background: "linear-gradient(135deg, #7c3aed, #a855f7)",
-                    color: "#fff", padding: "12px 24px", borderRadius: 12,
-                    fontWeight: 700, textDecoration: "none", fontSize: "0.9rem",
-                  }}>
-                    Discover Creators →
-                  </a>
-                </div>
-              ) : (
-                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                  {subscriptions.map((sub) => (
-                    <div key={sub.id} style={{
-                      background: "#fff",
-                      border: "1.5px solid #ede9fe",
-                      borderRadius: 14, padding: "18px 22px",
-                      display: "flex", alignItems: "center", justifyContent: "space-between",
-                      boxShadow: "0 2px 12px rgba(124,58,237,0.06)",
-                    }}>
-                      <div>
-                        <p style={{ fontWeight: 700, color: "#1f2937", margin: "0 0 6px", fontSize: "1rem" }}>
-                          {sub.creatorName || sub.creatorUsername || sub.creatorId}
-                          {sub.creatorUsername && (
-                            <span style={{ color: "#9ca3af", fontWeight: 500, fontSize: "0.85rem", marginLeft: 6 }}>
-                              @{sub.creatorUsername}
-                            </span>
-                          )}
-                        </p>
-                        <span style={{
-                          background: "#dcfce7", color: "#166534",
-                          borderRadius: 99, padding: "2px 10px",
-                          fontSize: "0.72rem", fontWeight: 700,
-                        }}>
-                          ✓ Active
-                        </span>
-                      </div>
-                      {sub.creatorUsername && (
-                        <a href={`/${sub.creatorUsername}`} style={{
-                          color: "#7c3aed", fontWeight: 700, fontSize: "0.85rem",
-                          textDecoration: "none", padding: "8px 16px",
-                          border: "1.5px solid #ede9fe", borderRadius: 10,
-                          transition: "all 0.15s",
-                        }}>
-                          Ask a Question →
-                        </a>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </section>
-
-            {/* ── Questions ── */}
-            <section>
-              <h2 style={{
-                fontSize: "0.75rem", fontWeight: 800, color: "#374151",
-                textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 16,
-              }}>
-                ❓ My Questions ({questions.length})
-              </h2>
-
-              {questions.length === 0 ? (
-                <div style={{
-                  background: "#fff", border: "1px solid #e5e7eb",
-                  borderRadius: 16, padding: "40px 32px", textAlign: "center",
-                }}>
-                  <div style={{ fontSize: "2.5rem", marginBottom: 12 }}>💬</div>
-                  <p style={{ color: "#6b7280", fontSize: "0.95rem" }}>
-                    You haven&apos;t asked any questions yet.
-                  </p>
-                </div>
-              ) : (
-                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                  {questions.map((q) => (
-                    <div key={q.id} style={{
-                      background: "#fff", border: "1px solid #e5e7eb",
-                      borderRadius: 14, padding: "18px 22px",
-                      boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
-                    }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, marginBottom: 10 }}>
-                        <p style={{ fontWeight: 600, color: "#1f2937", margin: 0, flex: 1, lineHeight: 1.55 }}>
-                          {q.content}
-                        </p>
-                        <span style={{
-                          background: q.status === "ANSWERED" ? "#dcfce7" : q.status === "PENDING" ? "#fef3c7" : "#f3f4f6",
-                          color: q.status === "ANSWERED" ? "#166534" : q.status === "PENDING" ? "#92400e" : "#6b7280",
-                          borderRadius: 99, padding: "3px 11px",
-                          fontSize: "0.7rem", fontWeight: 700, whiteSpace: "nowrap", flexShrink: 0,
-                        }}>
-                          {q.status}
-                        </span>
-                      </div>
-
-                      {q.response && (
-                        <div style={{
-                          background: "#f0fdf4", border: "1px solid #bbf7d0",
-                          borderRadius: 10, padding: "12px 16px",
-                          fontSize: "0.88rem", color: "#166534", lineHeight: 1.65,
-                        }}>
-                          <strong>Answer: </strong>{q.response}
-                        </div>
-                      )}
-
-                      <p style={{ color: "#9ca3af", fontSize: "0.74rem", margin: "10px 0 0" }}>
-                        {q.createdAt.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </section>
-          </>
-        )}
+  const statCard = (label: string, value: string | number, icon: string, iconBg: string, valueColor: string) => (
+    <div
+      style={{ background: "#fff", border: "1px solid #f0f0f0", borderRadius: 16, padding: "20px", display: "flex", alignItems: "center", gap: 14, boxShadow: "0 1px 4px rgba(0,0,0,0.04)", transition: "box-shadow 0.2s, transform 0.2s" }}
+      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.boxShadow = "0 4px 16px rgba(124,58,237,0.1)"; (e.currentTarget as HTMLElement).style.transform = "translateY(-2px)"; }}
+      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.boxShadow = "0 1px 4px rgba(0,0,0,0.04)"; (e.currentTarget as HTMLElement).style.transform = ""; }}
+    >
+      <div style={{ width: 42, height: 42, borderRadius: 12, background: iconBg, display: "grid", placeItems: "center", fontSize: "1.2rem", flexShrink: 0 }}>{icon}</div>
+      <div>
+        <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: "1.5rem", fontWeight: 800, color: valueColor, lineHeight: 1 }}>{loading ? "—" : value}</div>
+        <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: "0.72rem", fontWeight: 600, color: "#999", marginTop: 3 }}>{label}</div>
       </div>
     </div>
+  );
+
+  const statusBadge = (status: string) => {
+    const cfg = status === "ANSWERED" ? { bg: "#dcfce7", color: "#166534" } : status === "PENDING" ? { bg: "#fef3c7", color: "#92400e" } : { bg: "#f3f4f6", color: "#6b7280" };
+    return <span style={{ ...cfg, borderRadius: 99, padding: "3px 10px", fontSize: "0.68rem", fontWeight: 800, whiteSpace: "nowrap" as const, fontFamily: "'Outfit',sans-serif", textTransform: "uppercase" as const }}>{status}</span>;
+  };
+
+  const sectionTitle = (text: string) => (
+    <p style={{ fontFamily: "'Outfit',sans-serif", fontSize: "0.65rem", fontWeight: 800, color: "#7c3aed", textTransform: "uppercase", letterSpacing: "0.15em", marginBottom: 16 }}>{text}</p>
+  );
+
+  const card = (children: React.ReactNode, extra?: React.CSSProperties) => (
+    <div style={{ background: "#fff", border: "1px solid #f0f0f0", borderRadius: 16, padding: "24px", boxShadow: "0 1px 6px rgba(0,0,0,0.04)", marginBottom: 20, ...extra }}>{children}</div>
+  );
+
+  const emptyState = (icon: string, text: string, cta?: { label: string; nav?: NavId; href?: string }) => (
+    <div style={{ textAlign: "center", padding: "48px 24px" }}>
+      <div style={{ fontSize: "2.5rem", marginBottom: 12 }}>{icon}</div>
+      <p style={{ fontFamily: "'Outfit',sans-serif", color: "#9ca3af", marginBottom: 20, fontSize: "0.92rem" }}>{text}</p>
+      {cta && (
+        cta.href
+          ? <a href={cta.href} style={{ display: "inline-block", background: "linear-gradient(135deg,#7c3aed,#a855f7)", color: "#fff", padding: "10px 22px", borderRadius: 12, fontWeight: 700, fontSize: "0.88rem", textDecoration: "none", fontFamily: "'Outfit',sans-serif" }}>{cta.label}</a>
+          : <button onClick={() => cta.nav && go(cta.nav)} style={{ background: "linear-gradient(135deg,#7c3aed,#a855f7)", color: "#fff", border: "none", padding: "10px 22px", borderRadius: 12, fontWeight: 700, fontSize: "0.88rem", cursor: "pointer", fontFamily: "'Outfit',sans-serif" }}>{cta.label}</button>
+      )}
+    </div>
+  );
+
+  const creatorRow = (sub: Subscription) => (
+    <div key={sub.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 0", borderBottom: "1px solid #f3f4f6" }}>
+      <div style={{ width: 38, height: 38, borderRadius: "50%", background: "linear-gradient(135deg,#7c3aed,#a855f7)", display: "grid", placeItems: "center", color: "#fff", fontFamily: "'Outfit',sans-serif", fontWeight: 800, fontSize: "0.85rem", flexShrink: 0 }}>
+        {(sub.creatorName || sub.creatorUsername || "?")[0].toUpperCase()}
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <p style={{ fontFamily: "'Outfit',sans-serif", fontWeight: 700, color: "#1f2937", fontSize: "0.9rem", margin: "0 0 2px" }}>{sub.creatorName || sub.creatorUsername || sub.creatorId}</p>
+        {sub.creatorUsername && <p style={{ fontFamily: "'Outfit',sans-serif", color: "#9ca3af", fontSize: "0.75rem", margin: 0 }}>@{sub.creatorUsername}</p>}
+      </div>
+      <span style={{ background: "#dcfce7", color: "#166534", borderRadius: 99, padding: "2px 10px", fontSize: "0.68rem", fontWeight: 800, fontFamily: "'Outfit',sans-serif" }}>Active</span>
+      {sub.creatorUsername && (
+        <a href={`/${sub.creatorUsername}`} style={{ color: "#7c3aed", fontWeight: 700, fontSize: "0.82rem", textDecoration: "none", padding: "6px 14px", border: "1.5px solid #ede9fe", borderRadius: 10, fontFamily: "'Outfit',sans-serif", whiteSpace: "nowrap" }}>Ask →</a>
+      )}
+    </div>
+  );
+
+  return (
+    <>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&display=swap');
+        .fan-root * { box-sizing: border-box; margin: 0; padding: 0; }
+        .fan-sidebar { width: 232px; min-width: 232px; height: 100vh; background: #0a0a0a; border-right: 1px solid rgba(167,139,250,0.10); display: flex; flex-direction: column; position: fixed; top: 0; left: 0; z-index: 200; transition: transform 0.3s cubic-bezier(0.4,0,0.2,1); }
+        .fan-main { margin-left: 232px; min-height: 100vh; background: #f7f7f8; display: flex; flex-direction: column; }
+        .fan-topbar { background: #fff; border-bottom: 1px solid #f0f0f0; height: 60px; padding: 0 28px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 100; }
+        .fan-content { padding: 40px 24px; }
+        .fan-stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; margin-bottom: 28px; }
+        .fan-hamburger { display: none; background: none; border: none; cursor: pointer; color: #7c3aed; font-size: 1.3rem; padding: 4px 8px; border-radius: 8px; }
+        .fan-overlay { display: none; }
+        .fan-bnav { display: none; }
+        @media (max-width: 800px) {
+          .fan-sidebar { transform: translateX(-100%); }
+          .fan-sidebar.open { transform: translateX(0); box-shadow: 4px 0 32px rgba(0,0,0,0.3); }
+          .fan-main { margin-left: 0; }
+          .fan-topbar { padding: 0 18px; }
+          .fan-hamburger { display: block; }
+          .fan-content { padding: 24px 16px 100px; }
+          .fan-overlay { display: block; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 199; }
+          .fan-stat-grid { grid-template-columns: repeat(2, 1fr); }
+          .fan-bnav { display: block; position: fixed; bottom: 0; left: 0; right: 0; background: #fff; border-top: 1px solid #f0f0f0; z-index: 300; padding: 8px 0 env(safe-area-inset-bottom,8px); }
+          .fan-bnav-inner { display: flex; justify-content: space-around; }
+          .fan-bnav-btn { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 4px 8px; border: none; background: none; cursor: pointer; color: #9ca3af; font-family: 'Outfit',sans-serif; font-size: 0.62rem; font-weight: 600; min-width: 52px; }
+          .fan-bnav-btn.active { color: #7c3aed; }
+        }
+        @media (max-width: 420px) { .fan-stat-grid { grid-template-columns: 1fr; } }
+        .fan-input { width: 100%; padding: 12px 16px; border: 1.5px solid #e5e7eb; border-radius: 12px; font-size: 0.9rem; font-family: 'Outfit',sans-serif; outline: none; }
+        .fan-input:focus { border-color: #a855f7; box-shadow: 0 0 0 3px rgba(168,85,247,0.1); }
+      `}</style>
+
+      <div className="fan-root" style={{ minHeight: "100vh" }}>
+
+        {mobileOpen && <div className="fan-overlay" onClick={() => setMobileOpen(false)} />}
+
+        {/* ── Sidebar ── */}
+        <aside className={`fan-sidebar${mobileOpen ? " open" : ""}`}>
+          <div style={{ padding: "20px 16px 16px", borderBottom: "1px solid rgba(167,139,250,0.08)", flexShrink: 0 }}>
+            <a href="/" style={{ display: "flex", alignItems: "center", gap: 10, textDecoration: "none" }}>
+              <div style={{ background: "linear-gradient(135deg,#a78bfa,#7c3aed)", borderRadius: 10, width: 34, height: 34, display: "grid", placeItems: "center", fontFamily: "'Outfit',sans-serif", fontWeight: 900, color: "#fff", fontSize: "1rem", boxShadow: "0 4px 14px rgba(124,58,237,0.4)", flexShrink: 0 }}>A</div>
+              <span style={{ fontFamily: "'Outfit',sans-serif", fontWeight: 800, fontSize: "1.08rem", color: "#fff", letterSpacing: "-0.02em" }}>AskExpert</span>
+            </a>
+          </div>
+
+          {sidebarNav}
+          {sidebarFooter}
+        </aside>
+
+        {/* ── Main ── */}
+        <main className="fan-main">
+          <header className="fan-topbar">
+            <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+              <button className="fan-hamburger" onClick={() => setMobileOpen(!mobileOpen)} aria-label="Menu">☰</button>
+              <a href="/" style={{ display: "flex", alignItems: "center", gap: 9, textDecoration: "none" }}>
+                <div style={{ background: "linear-gradient(135deg,#a78bfa,#7c3aed)", borderRadius: 9, width: 30, height: 30, display: "grid", placeItems: "center", fontFamily: "'Outfit',sans-serif", fontWeight: 900, color: "#fff", fontSize: "0.9rem", boxShadow: "0 3px 10px rgba(124,58,237,0.35)", flexShrink: 0 }}>A</div>
+                <span style={{ fontFamily: "'Outfit',sans-serif", fontWeight: 800, fontSize: "1rem", color: "#111", letterSpacing: "-0.02em" }}>AskExpert</span>
+              </a>
+            </div>
+            <div style={{ display: "flex", gap: 10 }}>
+              {username && (
+                <a href={`/${username}`} style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 16px", borderRadius: 99, border: "1.5px solid #ede9fe", background: "#fff", color: "#7c3aed", fontFamily: "'Outfit',sans-serif", fontWeight: 700, fontSize: "0.82rem", textDecoration: "none", whiteSpace: "nowrap" }}>
+                  <svg width="14" height="14" fill="none" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4" stroke="currentColor" strokeWidth="2"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>
+                  View Profile
+                </a>
+              )}
+            </div>
+          </header>
+
+          <div className="fan-content">
+            <div style={{ maxWidth: 980, margin: "0 auto" }}>
+
+            {/* HOME */}
+            {activeNav === "home" && (
+              <>
+                <div style={{ marginBottom: 24 }}>
+                  <h1 style={{ fontFamily: "'Outfit',sans-serif", fontWeight: 800, fontSize: "clamp(1.5rem,3vw,2rem)", color: "#111", margin: "0 0 4px" }}>Welcome back, {displayName.split(" ")[0]} 👋</h1>
+                  <p style={{ fontFamily: "'Outfit',sans-serif", color: "#888", fontSize: "0.9rem", margin: 0 }}>Here&apos;s what&apos;s happening with your subscriptions.</p>
+                </div>
+
+                {/* Stat row */}
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: 12, marginBottom: 24 }}>
+                  {statCard("Subscriptions", subscriptions.length, "⭐", "#f5f3ff", "#7c3aed")}
+                  {statCard("Questions Asked", questions.length, "💬", "#f0fdf4", "#059669")}
+                  {statCard("Answered", answeredCount, "✅", "#ecfdf5", "#059669")}
+                  {statCard("Pending", pendingCount, "⏳", "#fffbeb", "#d97706")}
+                </div>
+
+                {/* Two-column body */}
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, alignItems: "start" }}>
+                  {/* Left – Your Creators */}
+                  {card(<>
+                    {sectionTitle("Your Creators")}
+                    {loading
+                      ? <div style={{ textAlign: "center", padding: 40, color: "#9ca3af", fontFamily: "'Outfit',sans-serif" }}>Loading…</div>
+                      : subscriptions.length === 0
+                        ? emptyState("⭐", "No subscriptions yet.", { label: "Find Creators →", nav: "discover" })
+                        : <div style={{ marginTop: -8 }}>{subscriptions.slice(0, 6).map(creatorRow)}<div style={{ height: 1 }} /></div>
+                    }
+                    {subscriptions.length > 0 && (
+                      <button onClick={() => go("subscriptions")} style={{ background: "none", border: "none", color: "#7c3aed", fontWeight: 700, fontSize: "0.82rem", cursor: "pointer", paddingTop: 12, fontFamily: "'Outfit',sans-serif" }}>
+                        View all {subscriptions.length} →
+                      </button>
+                    )}
+                  </>, { marginBottom: 0 })}
+
+                  {/* Right – Recent Questions */}
+                  {card(<>
+                    {sectionTitle("Recent Questions")}
+                    {loading
+                      ? <div style={{ textAlign: "center", padding: 40, color: "#9ca3af", fontFamily: "'Outfit',sans-serif" }}>Loading…</div>
+                      : questions.length === 0
+                        ? emptyState("💬", "No questions yet.", { label: "View Subscriptions →", nav: "subscriptions" })
+                        : <>
+                            {questions.slice(0, 5).map((q) => (
+                              <div key={q.id} style={{ padding: "12px 0", borderBottom: "1px solid #f3f4f6" }}>
+                                <div style={{ display: "flex", justifyContent: "space-between", gap: 10, marginBottom: q.response ? 6 : 0 }}>
+                                  <p style={{ fontFamily: "'Outfit',sans-serif", color: "#374151", fontSize: "0.85rem", lineHeight: 1.55, flex: 1 }}>
+                                    {q.content.length > 80 ? q.content.slice(0, 80) + "…" : q.content}
+                                  </p>
+                                  {statusBadge(q.status)}
+                                </div>
+                                {q.response && (
+                                  <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 8, padding: "8px 12px", fontSize: "0.8rem", color: "#166534", fontFamily: "'Outfit',sans-serif" }}>
+                                    <strong>Answer: </strong>{q.response.slice(0, 90)}{q.response.length > 90 ? "…" : ""}
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                            {questions.length > 5 && (
+                              <button onClick={() => go("questions")} style={{ background: "none", border: "none", color: "#7c3aed", fontWeight: 700, fontSize: "0.82rem", cursor: "pointer", paddingTop: 12, fontFamily: "'Outfit',sans-serif" }}>
+                                View all {questions.length} →
+                              </button>
+                            )}
+                          </>
+                    }
+                  </>, { marginBottom: 0 })}
+                </div>
+              </>
+            )}
+
+            {/* DISCOVER */}
+            {activeNav === "discover" && (
+              <>
+                <div style={{ marginBottom: 24 }}>
+                  <h1 style={{ fontFamily: "'Outfit',sans-serif", fontWeight: 800, fontSize: "clamp(1.5rem,3vw,2rem)", color: "#111", margin: "0 0 4px" }}>Discover Creators</h1>
+                  <p style={{ fontFamily: "'Outfit',sans-serif", color: "#888", fontSize: "0.9rem", margin: 0 }}>Visit a creator&apos;s page to subscribe or ask a question.</p>
+                </div>
+                {card(<>
+                  {sectionTitle("Visit a Creator")}
+                  <p style={{ fontFamily: "'Outfit',sans-serif", color: "#6b7280", fontSize: "0.88rem", marginBottom: 16 }}>Enter a username or full profile URL.</p>
+                  <form onSubmit={handleFindCreator} style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                    <input className="fan-input" style={{ flex: 1, minWidth: 200 }} type="text" placeholder="username  or  /username  or  full URL" value={creatorUrl} onChange={(e) => setCreatorUrl(e.target.value)} required />
+                    <button type="submit" style={{ padding: "0 24px", height: 48, background: "linear-gradient(135deg,#7c3aed,#a855f7)", color: "#fff", border: "none", borderRadius: 12, fontWeight: 800, fontSize: "0.9rem", cursor: "pointer", fontFamily: "'Outfit',sans-serif" }}>Go →</button>
+                  </form>
+                </>)}
+                {card(<>
+                  {sectionTitle("Subscribed Creators")}
+                  {loading ? <div style={{ textAlign: "center", padding: 32, color: "#9ca3af", fontFamily: "'Outfit',sans-serif" }}>Loading…</div>
+                    : subscriptions.length === 0 ? emptyState("🔍", "Subscribe to a creator to start asking questions.")
+                    : <div style={{ marginTop: -8 }}>{subscriptions.map(creatorRow)}<div style={{ height: 1 }} /></div>
+                  }
+                </>)}
+              </>
+            )}
+
+            {/* SUBSCRIPTIONS */}
+            {activeNav === "subscriptions" && (
+              <>
+                <div style={{ marginBottom: 24 }}>
+                  <h1 style={{ fontFamily: "'Outfit',sans-serif", fontWeight: 800, fontSize: "clamp(1.5rem,3vw,2rem)", color: "#111", margin: "0 0 4px" }}>My Subscriptions</h1>
+                  <p style={{ fontFamily: "'Outfit',sans-serif", color: "#888", fontSize: "0.9rem", margin: 0 }}>{loading ? "…" : `${subscriptions.length} active ${subscriptions.length === 1 ? "subscription" : "subscriptions"}`}</p>
+                </div>
+                {loading ? (
+                  <div style={{ textAlign: "center", padding: 60, color: "#9ca3af", fontFamily: "'Outfit',sans-serif" }}>Loading…</div>
+                ) : subscriptions.length === 0 ? card(emptyState("⭐", "No active subscriptions yet.", { label: "Find Creators →", nav: "discover" }))
+                  : subscriptions.map((sub) => (
+                    <div key={sub.id} style={{ background: "#fff", border: "1px solid #f0f0f0", borderRadius: 16, padding: "20px 22px", marginBottom: 12, boxShadow: "0 1px 4px rgba(0,0,0,0.04)", transition: "box-shadow 0.2s, transform 0.2s" }}
+                      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.boxShadow = "0 4px 16px rgba(124,58,237,0.1)"; (e.currentTarget as HTMLElement).style.transform = "translateY(-2px)"; }}
+                      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.boxShadow = "0 1px 4px rgba(0,0,0,0.04)"; (e.currentTarget as HTMLElement).style.transform = ""; }}
+                    >
+                      <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                        <div style={{ width: 46, height: 46, borderRadius: "50%", background: "linear-gradient(135deg,#7c3aed,#a855f7)", display: "grid", placeItems: "center", color: "#fff", fontFamily: "'Outfit',sans-serif", fontWeight: 800, fontSize: "0.95rem", flexShrink: 0 }}>
+                          {(sub.creatorName || sub.creatorUsername || "?")[0].toUpperCase()}
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <p style={{ fontFamily: "'Outfit',sans-serif", fontWeight: 700, color: "#1f2937", fontSize: "0.95rem", marginBottom: 2 }}>{sub.creatorName || sub.creatorUsername || sub.creatorId}</p>
+                          {sub.creatorUsername && <p style={{ fontFamily: "'Outfit',sans-serif", color: "#9ca3af", fontSize: "0.78rem", marginBottom: 8 }}>@{sub.creatorUsername}</p>}
+                          <span style={{ background: "#dcfce7", color: "#166534", borderRadius: 99, padding: "2px 10px", fontSize: "0.68rem", fontWeight: 800, fontFamily: "'Outfit',sans-serif" }}>✓ Active</span>
+                        </div>
+                        {sub.creatorUsername && (
+                          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                            <a href={`/${sub.creatorUsername}`} style={{ display: "block", background: "linear-gradient(135deg,#7c3aed,#a855f7)", color: "#fff", padding: "8px 16px", borderRadius: 10, fontWeight: 700, fontSize: "0.8rem", textDecoration: "none", fontFamily: "'Outfit',sans-serif", textAlign: "center", whiteSpace: "nowrap" }}>Ask a Question →</a>
+                            <a href={`/${sub.creatorUsername}`} style={{ display: "block", color: "#7c3aed", padding: "7px 16px", borderRadius: 10, fontWeight: 700, fontSize: "0.78rem", textDecoration: "none", fontFamily: "'Outfit',sans-serif", textAlign: "center", border: "1.5px solid #ede9fe", whiteSpace: "nowrap" }}>View Page</a>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))
+                }
+              </>
+            )}
+
+            {/* QUESTIONS */}
+            {activeNav === "questions" && (
+              <>
+                <div style={{ marginBottom: 24 }}>
+                  <h1 style={{ fontFamily: "'Outfit',sans-serif", fontWeight: 800, fontSize: "clamp(1.5rem,3vw,2rem)", color: "#111", margin: "0 0 4px" }}>My Questions</h1>
+                  <p style={{ fontFamily: "'Outfit',sans-serif", color: "#888", fontSize: "0.9rem", margin: 0 }}>{loading ? "…" : `${answeredCount} answered · ${pendingCount} pending`}</p>
+                </div>
+
+                {/* Filter pills */}
+                <div style={{ background: "#fff", border: "1px solid #f0f0f0", borderRadius: 16, padding: "16px 20px", marginBottom: 20, boxShadow: "0 1px 4px rgba(0,0,0,0.04)", display: "flex", gap: 6, flexWrap: "wrap" as const, alignItems: "center" }}>
+                  {(["ALL", "PENDING", "ANSWERED"] as const).map((s) => {
+                    const active = (activeQFilter ?? "ALL") === s;
+                    const labels: Record<string, string> = { ALL: "All", PENDING: "⏳ Pending", ANSWERED: "✅ Answered" };
+                    return (
+                      <button key={s} onClick={() => setActiveQFilter(s)} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "0.45rem 1.1rem", fontFamily: "'Outfit',sans-serif", fontSize: "0.84rem", fontWeight: 600, borderRadius: 99, border: "none", cursor: "pointer", transition: "all 0.18s", background: active ? "#7c3aed" : "#f3f4f6", color: active ? "#fff" : "#6b7280", whiteSpace: "nowrap" as const }}>
+                        {labels[s]}
+                        {s === "PENDING" && pendingCount > 0 && <span style={{ background: active ? "rgba(255,255,255,0.25)" : "#ede9fe", color: active ? "#fff" : "#7c3aed", borderRadius: 99, padding: "1px 7px", fontSize: "0.72rem", fontWeight: 800 }}>{pendingCount}</span>}
+                      </button>
+                    );
+                  })}
+                  <span style={{ marginLeft: "auto", fontFamily: "'Outfit',sans-serif", color: "#9ca3af", fontSize: "0.82rem" }}>
+                    {questions.filter(q => (activeQFilter ?? "ALL") === "ALL" || q.status === activeQFilter).length} result{questions.filter(q => (activeQFilter ?? "ALL") === "ALL" || q.status === activeQFilter).length !== 1 ? "s" : ""}
+                  </span>
+                </div>
+
+                {loading ? (
+                  <div style={{ textAlign: "center", padding: 60, color: "#9ca3af", fontFamily: "'Outfit',sans-serif" }}>Loading…</div>
+                ) : (() => {
+                  const filtered = questions.filter(q => (activeQFilter ?? "ALL") === "ALL" || q.status === activeQFilter);
+                  return filtered.length === 0 ? card(
+                    <div style={{ textAlign: "center", padding: "32px 0" }}>
+                      <p style={{ fontSize: "2rem", marginBottom: 10 }}>📭</p>
+                      <p style={{ fontFamily: "'Outfit',sans-serif", color: "#999", margin: "0 0 14px", fontSize: "0.92rem" }}>No questions match these filters.</p>
+                      <button onClick={() => setActiveQFilter("ALL")} style={{ background: "#7c3aed", border: "none", color: "#fff", fontWeight: 700, cursor: "pointer", fontSize: "0.85rem", padding: "8px 20px", borderRadius: 99, fontFamily: "'Outfit',sans-serif" }}>Clear filters</button>
+                    </div>
+                  ) : <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                    {filtered.map((q) => (
+                      <div key={q.id} style={{ background: "#fff", border: "1px solid #f0f0f0", borderRadius: 16, padding: "20px 22px", boxShadow: "0 1px 4px rgba(0,0,0,0.04)", transition: "box-shadow 0.2s, transform 0.2s" }}
+                        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.boxShadow = "0 4px 16px rgba(124,58,237,0.1)"; (e.currentTarget as HTMLElement).style.transform = "translateY(-2px)"; }}
+                        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.boxShadow = "0 1px 4px rgba(0,0,0,0.04)"; (e.currentTarget as HTMLElement).style.transform = ""; }}
+                      >
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, marginBottom: 10 }}>
+                          <div style={{ flex: 1 }}>
+                            <p style={{ fontFamily: "'Outfit',sans-serif", fontWeight: 600, color: "#1f2937", fontSize: "0.92rem", lineHeight: 1.6, marginBottom: 4 }}>{q.content}</p>
+                            {q.creatorUsername && <p style={{ fontFamily: "'Outfit',sans-serif", fontSize: "0.74rem", color: "#9ca3af", margin: 0 }}>To <a href={`/${q.creatorUsername}`} style={{ color: "#7c3aed", fontWeight: 600 }}>@{q.creatorUsername}</a></p>}
+                          </div>
+                          {statusBadge(q.status)}
+                        </div>
+                        {q.response && (
+                          <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 12, padding: "12px 16px", marginBottom: 10 }}>
+                            <p style={{ fontFamily: "'Outfit',sans-serif", fontSize: "0.68rem", fontWeight: 800, color: "#166534", textTransform: "uppercase" as const, letterSpacing: "0.08em", marginBottom: 6 }}>Creator&apos;s Answer</p>
+                            <p style={{ fontFamily: "'Outfit',sans-serif", fontSize: "0.88rem", color: "#166534", lineHeight: 1.65, margin: 0 }}>{q.response}</p>
+                          </div>
+                        )}
+                        <p style={{ fontFamily: "'Outfit',sans-serif", color: "#bbb", fontSize: "0.72rem", margin: 0 }}>{q.createdAt.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}</p>
+                      </div>
+                    ))}
+                  </div>;
+                })()}
+              </>
+            )}
+
+            {/* SETTINGS */}
+            {activeNav === "settings" && (
+              <>
+                <div style={{ marginBottom: 24 }}>
+                  <h1 style={{ fontFamily: "'Outfit',sans-serif", fontWeight: 800, fontSize: "clamp(1.5rem,3vw,2rem)", color: "#111", margin: "0 0 4px" }}>Settings</h1>
+                  <p style={{ fontFamily: "'Outfit',sans-serif", color: "#888", fontSize: "0.9rem", margin: 0 }}>Manage your fan account.</p>
+                </div>
+                {card(<>
+                  {sectionTitle("Account")}
+                  {[
+                    { label: "Display Name", value: displayName },
+                    { label: "Email", value: user.email },
+                    { label: "Username", value: username ? `@${username}` : "—" },
+                    { label: "Role", value: "Fan member" },
+                  ].map((row) => (
+                    <div key={row.label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 0", borderBottom: "1px solid #f3f4f6" }}>
+                      <div>
+                        <div style={{ fontFamily: "'Outfit',sans-serif", fontWeight: 700, color: "#374151", fontSize: "0.88rem", marginBottom: 2 }}>{row.label}</div>
+                        <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: "0.8rem", color: "#9ca3af" }}>{row.value}</div>
+                      </div>
+                    </div>
+                  ))}
+                </>)}
+                {card(<>
+                  {sectionTitle("Creator Mode")}
+                  <p style={{ fontFamily: "'Outfit',sans-serif", color: "#6b7280", fontSize: "0.88rem", marginBottom: 18, lineHeight: 1.6 }}>Want to earn by answering questions? Go to the Creator Dashboard to set up your profile.</p>
+                  <button onClick={() => router.push("/dashboard")} style={{ background: "linear-gradient(135deg,#7c3aed,#a855f7)", color: "#fff", border: "none", padding: "10px 22px", borderRadius: 12, fontWeight: 700, fontSize: "0.88rem", cursor: "pointer", fontFamily: "'Outfit',sans-serif" }}>Go to Creator Dashboard →</button>
+                </>)}
+                {card(<>
+                  {sectionTitle("Danger Zone")}
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <div>
+                      <div style={{ fontFamily: "'Outfit',sans-serif", fontWeight: 700, color: "#374151", fontSize: "0.88rem", marginBottom: 2 }}>Sign Out</div>
+                      <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: "0.8rem", color: "#9ca3af" }}>Sign out of your account on this device.</div>
+                    </div>
+                    <button onClick={handleLogout} style={{ background: "#fef2f2", border: "1px solid #fecaca", color: "#ef4444", borderRadius: 10, padding: "8px 18px", fontWeight: 700, fontSize: "0.82rem", cursor: "pointer", fontFamily: "'Outfit',sans-serif" }}>Sign Out</button>
+                  </div>
+                </>)}
+              </>
+            )}
+
+            </div>{/* /maxWidth wrapper */}
+          </div>
+        </main>
+
+        {/* ── Bottom Nav (mobile) ── */}
+        <nav className="fan-bnav">
+          <div className="fan-bnav-inner">
+            {NAV.map((item) => (
+              <button key={item.id} className={`fan-bnav-btn${activeNav === item.id ? " active" : ""}`} onClick={() => go(item.id)}>
+                <span style={{ fontSize: "1.2rem", display: "flex" }}>{item.icon}</span>
+                {item.label.split(" ")[0]}
+              </button>
+            ))}
+          </div>
+        </nav>
+
+      </div>
+    </>
   );
 }

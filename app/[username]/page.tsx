@@ -111,6 +111,11 @@ export default function CreatorProfilePage({ params }: { params: Promise<{ usern
   const [notFoundFlag, setNotFoundFlag]   = useState(false);
   const [payMode, setPayMode]             = useState<"one-time" | "monthly">("one-time");
   const [countryCode, setCountryCode]     = useState<string | null>(null);
+  const [isInsidePreviewIframe, setIsInsidePreviewIframe] = useState(false);
+
+  useEffect(() => {
+    setIsInsidePreviewIframe(window.self !== window.top);
+  }, []);
 
   // Ask form
   const [question,    setQuestion]    = useState("");
@@ -198,8 +203,12 @@ export default function CreatorProfilePage({ params }: { params: Promise<{ usern
     checkSub();
   }, [user, display?.uid]);
 
-  // ── fetch creator ────────────────────────────────────────────────────────
+  // ── fetch creator (skipped when inside settings live-preview iframe) ───────
   useEffect(() => {
+    // When embedded in the settings preview panel, skip Firestore entirely.
+    // The parent frame sends all profile data via __PREVIEW__ postMessage.
+    if (isInsidePreviewIframe) return;
+
     let unsubscribe: (() => void) | undefined;
 
     const initListener = async () => {
@@ -207,15 +216,15 @@ export default function CreatorProfilePage({ params }: { params: Promise<{ usern
         collection(db, COLLECTIONS.USERS),
         where("username", "==", username)
       );
-      
+
       const snap = await getDocs(q);
-      if (snap.empty) { 
-        setNotFoundFlag(true); 
-        return; 
+      if (snap.empty) {
+        setNotFoundFlag(true);
+        return;
       }
-      
+
       const docId = snap.docs[0].id;
-      
+
       // Use onSnapshot for real-time updates
       const { onSnapshot, doc } = await import("firebase/firestore");
       unsubscribe = onSnapshot(doc(db, COLLECTIONS.USERS, docId), (docSnap) => {
@@ -224,20 +233,16 @@ export default function CreatorProfilePage({ params }: { params: Promise<{ usern
           const data = {
             ...raw as FirestoreUser,
             uid: docSnap.id,
-            // Convert timestamps
             lastSeen: (raw as any).lastSeen?.toDate?.() || null,
             vacationUntil: (raw as any).vacationUntil?.toDate?.() || null,
           };
           setCreator(data);
-          
-          // Fetch public QA once
           fetchPublicQA(data.uid);
         } else {
           setNotFoundFlag(true);
         }
       }, (err) => {
         console.error("Firestore onSnapshot error:", err);
-        // Fallback or silent failure
       });
     };
 
@@ -251,7 +256,7 @@ export default function CreatorProfilePage({ params }: { params: Promise<{ usern
           orderBy("answeredAt", "desc")
         );
         const qsnap = await getDocs(qqs);
-        const results = qsnap.docs.map((d) => {
+        setPublicQA(qsnap.docs.map((d) => {
           const qd = d.data();
           return {
             ...qd, id: d.id,
@@ -259,8 +264,7 @@ export default function CreatorProfilePage({ params }: { params: Promise<{ usern
             answeredAt: qd.answeredAt?.toDate?.()  || null,
             expiresAt:  qd.expiresAt?.toDate?.()   || new Date(),
           } as FirestoreQuestion;
-        });
-        setPublicQA(results);
+        }));
       } catch {
         // index may not exist yet — silent
       }
@@ -271,10 +275,22 @@ export default function CreatorProfilePage({ params }: { params: Promise<{ usern
     return () => {
       if (unsubscribe) unsubscribe();
     };
-  }, [username]);
+  }, [username, isInsidePreviewIframe]);
 
   // ── merge preview overlay ────────────────────────────────────────────────
-  if (!display && !notFoundFlag) return null;
+  if (!display && !notFoundFlag) {
+    // Inside the preview iframe, show a loading shimmer while waiting for postMessage
+    if (isInsidePreviewIframe) {
+      return (
+        <div style={{ padding: "40px 24px", maxWidth: 660, margin: "0 auto" }}>
+          {[1, 2, 3].map(i => (
+            <div key={i} style={{ height: i === 1 ? 140 : 80, background: "#ededee", borderRadius: 16, marginBottom: 16, animation: "pulse 1.5s ease-in-out infinite" }} />
+          ))}
+        </div>
+      );
+    }
+    return null;
+  }
   if (notFoundFlag) return (
     <div style={{ height: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#f9fafb" }}>
       <div style={{ textAlign: "center" }}>
@@ -327,12 +343,22 @@ export default function CreatorProfilePage({ params }: { params: Promise<{ usern
 
   // ── subscribe-only (no question required) ───────────────────────────────
   const handleSubscribeClick = async () => {
+    // Prevent creator from subscribing to their own page
+    if (user && display && user.uid === display.uid) {
+      Swal.fire({
+        title: "That's your page!",
+        text: "You can't subscribe to your own creator profile.",
+        icon: "info",
+        confirmButtonColor: "var(--purple)",
+      });
+      return;
+    }
     if (!user) {
-      router.push(`/auth?mode=signup&role=fan`);
+      router.push(`/auth?mode=signup&redirect=${encodeURIComponent("/" + username)}`);
       return;
     }
     if (isSubscribed) {
-      router.push("/fan-dashboard");
+      router.push("/dashboard");
       return;
     }
     setSubmitting(true);
@@ -1044,21 +1070,25 @@ export default function CreatorProfilePage({ params }: { params: Promise<{ usern
           <div style={{ marginBottom: 16 }}>
             <button
               onClick={handleSubscribeClick}
-              disabled={submitting || !!display.vacationMode}
+              disabled={submitting || !!display.vacationMode || (!!user && user.uid === display.uid)}
               style={{
                 width: "100%", padding: "14px 0",
                 background: isSubscribed
                   ? "linear-gradient(135deg, #10b981, #059669)"
+                  : (user && user.uid === display.uid)
+                  ? "#9ca3af"
                   : "linear-gradient(135deg, #7c3aed, #a855f7)",
                 color: "#fff", border: "none", borderRadius: 12,
                 fontWeight: 800, fontSize: "0.95rem",
-                cursor: (submitting || display.vacationMode) ? "not-allowed" : "pointer",
+                cursor: (submitting || display.vacationMode || (user && user.uid === display.uid)) ? "not-allowed" : "pointer",
                 letterSpacing: "0.02em", transition: "opacity 0.2s",
                 opacity: (submitting || display.vacationMode) ? 0.7 : 1,
               }}
             >
-              {isSubscribed
-                ? "Go to Fan Dashboard →"
+              {user && user.uid === display.uid
+                ? "Your creator page"
+                : isSubscribed
+                ? "Go to Dashboard →"
                 : !user
                 ? "Sign Up & Subscribe →"
                 : `Subscribe ${currencySymbol}${(((display.monthlyPrice || 0) * pppFactor) / 100).toFixed(2)}/mo →`}
@@ -1084,7 +1114,7 @@ export default function CreatorProfilePage({ params }: { params: Promise<{ usern
       {/* ══════════════════════════════════════════════════════ */}
       <div style={{ ...SECTION, background: "#fff" }} id="ask">
         <p style={SECTION_TITLE}>✉️ Ask a Question</p>
-        {payMode === "monthly" && !isSubscribed ? (
+        {payMode === "monthly" && !isSubscribed && !(user && user.uid === display.uid) ? (
           <div style={{ textAlign: "center", padding: "32px 16px" }}>
             <div style={{ fontSize: "3rem", marginBottom: 16 }}>🌟</div>
             <h3 style={{ fontWeight: 800, fontSize: "1.25rem", color: "#1f2937", margin: "0 0 8px" }}>

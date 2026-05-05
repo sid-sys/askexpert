@@ -451,6 +451,27 @@ export default function Sidebar() {
           </div>
         )}
 
+        {/* Creator / Fan toggle */}
+        {!isCollapsed && (
+          <div style={{ display: "flex", background: "rgba(255,255,255,0.06)", borderRadius: 10, padding: 3, gap: 3, marginBottom: 4 }}>
+            {([{ label: "Creator", href: "/dashboard" }, { label: "Fan", href: "/fan-dashboard" }] as const).map(({ label, href }) => {
+              const active = label === "Creator";
+              return (
+                <button key={label} onClick={() => router.push(href)} style={{
+                  flex: 1, padding: "7px 0", borderRadius: 8, border: "none",
+                  fontFamily: "'Outfit',sans-serif", fontWeight: 700, fontSize: "0.78rem",
+                  cursor: active ? "default" : "pointer",
+                  background: active ? "#8036EB" : "transparent",
+                  color: active ? "#fff" : "rgba(161,161,170,0.6)",
+                  transition: "all 0.18s",
+                }}>
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+        )}
+
         {userProfile?.username && (
           isCollapsed ? (
             <Tooltip content={`${userProfile.displayName || userProfile.username}`} placement="right">

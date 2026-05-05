@@ -54,4 +54,13 @@
 22. **Member-only Updates**: Allow creators to post exclusive updates, files, or behind-the-scenes content visible only to active monthly subscribers.
 23. **Subscriber Push Notifications**: Notify fans instantly when a creator they subscribe to is back from vacation or posts a new public Q&A.
 24. **Multi-tier Memberships**: Support different subscription levels (e.g., Fan, Superfan, VIP) with varying perks like guaranteed faster response times or exclusive content access.
-
+25. **Member Badges**: Highlight supporters in public Q&A sections with a unique badge (e.g., "Verified Subscriber") to acknowledge their loyalty.
+26. **Supporter Dashboard**: A dedicated dashboard area for fans to see their active subscriptions, membership perks, and question history in one place.
+27. **Custom Welcome Message**: Enable creators to write a personalized "Thank You" message that displays immediately after a fan completes their monthly subscription.
+28. **Subscriber Exclusive Q&A**: Allow creators to mark specific Q&A pairs as "Subscriber Only," creating more value for the monthly membership.
+29. **AI Answer Assistant**: Integrate a simple AI tool in the dashboard to help creators draft initial responses based on their previous answers.
+30. **Earnings Analytics Graph**: Use `recharts` to show a weekly/monthly earnings chart for creators directly on the dashboard.
+31. **Dynamic Profile QR Code**: Generate a unique, brutalist-styled QR code for creators to share on social media, leading directly to their AskExpert profile.
+32. **Video Q&A Response**: Enable experts to upload or record short video responses directly in the dashboard for a more personal touch.
+33. **Expert Referral System**: Reward existing creators with lower platform fees for a limited time when they refer new successful experts.
+34. **Dashboard Question Archive**: Implement an archiving system for answered questions to declutter the active dashboard view.

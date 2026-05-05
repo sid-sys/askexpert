@@ -88,115 +88,54 @@ export function useProfileSettings() {
     setSocialLinks(Array.isArray(rawSl) ? rawSl : []);
     setSubscriberPerks((userProfile as any).subscriberPerks || []);
     setPppEnabled((userProfile as any).pppEnabled ?? false);
-
-    const dataSnapshot = JSON.stringify({
-      perQ: userProfile.perQuestionPrice ?? 500,
-      monthly: userProfile.monthlyPrice ?? 1000,
-      currency: initialCurrency,
-      bio: userProfile.bio || "",
-      tagline: (userProfile as any).tagline || "",
-      displayName: userProfile.displayName || "",
-      categories: (userProfile as any).categories || [],
-      responseTimeHours: (userProfile as any).responseTimeHours ?? 72,
-      subscriberPerks: (userProfile as any).subscriberPerks || [],
-      socialLinks: Array.isArray(rawSl) ? rawSl : [],
-      payoutMethod: (userProfile as any).payoutMethod ?? "manual_bank",
-      pppEnabled: (userProfile as any).pppEnabled ?? false,
-      bankDetails: bd || {},
-      vacationMode: (userProfile as any).vacationMode ?? false,
-      vacationUntil: (userProfile as any).vacationUntil?.toDate?.() || null,
-      vacationMessage: (userProfile as any).vacationMessage || "",
-    });
-    setLastSavedData(dataSnapshot);
+    setLastSavedData(JSON.stringify({ vacationMode: (userProfile as any).vacationMode ?? false }));
   }, [userProfile]);
 
-  // ── Auto-save logic ───────────────────────────────────────────────────────
-  useEffect(() => {
-    if (!user || !userProfile || !lastSavedData) return;
-
-    const currentDataObj = {
-      perQ, monthly, currency, bio, tagline, displayName, categories,
-      responseTimeHours, subscriberPerks, socialLinks, payoutMethod,
-      pppEnabled, vacationMode, vacationUntil, vacationMessage, bankDetails: {
-        bankName, accountHolderName: accountHolder, accountNumber,
-        country: bankCountry, ifscCode, swiftCode, paypalEmail, wiseEmail
-      }
-    };
-    const currentData = JSON.stringify(currentDataObj);
-
-    if (currentData === lastSavedData) return;
-
-    const t = setTimeout(async () => {
-      setSaving(true);
-      try {
-        const updateData: any = {
-          perQuestionPrice: perQ,
-          monthlyPrice:     monthly,
-          currency,
-          bio,
-          tagline,
-          displayName,
-          isCreator: true,
-          categories,
-          responseTimeHours,
-          subscriberPerks,
-          socialLinks,
-          payoutMethod,
-          pppEnabled,
-          vacationMode,
-          vacationUntil,
-          vacationMessage,
-          updatedAt: serverTimestamp(),
+  // ── Core save function ────────────────────────────────────────────────────
+  const saveNow = useCallback(async () => {
+    if (!user) return;
+    setSaving(true);
+    try {
+      const updateData: any = {
+        perQuestionPrice: perQ,
+        monthlyPrice:     monthly,
+        currency, bio, tagline, displayName, isCreator: true,
+        categories, responseTimeHours, subscriberPerks, socialLinks,
+        payoutMethod, pppEnabled, vacationMode, vacationUntil, vacationMessage,
+        updatedAt: serverTimestamp(),
+      };
+      if (payoutMethod === "manual_bank") {
+        updateData.bankDetails = {
+          accountHolderName: accountHolder, accountNumber, bankName,
+          country: bankCountry, ifscCode, swiftCode, paypalEmail, wiseEmail,
         };
+      }
+      await updateDoc(doc(db, COLLECTIONS.USERS, user.uid), updateData);
 
-        if (payoutMethod === "manual_bank") {
-          updateData.bankDetails = {
-            accountHolderName: accountHolder,
-            accountNumber,
-            bankName,
-            country: bankCountry,
-            ifscCode,
-            swiftCode,
-            paypalEmail,
-            wiseEmail,
-          };
-        }
-
-        await updateDoc(doc(db, COLLECTIONS.USERS, user.uid), updateData);
-
-        // Notify subscribers if vacation mode was turned OFF
-        const prevDataObj = JSON.parse(lastSavedData);
-        if (prevDataObj.vacationMode === true && vacationMode === false) {
-          console.log("Vacation mode turned off, notifying subscribers...");
+      if (lastSavedData) {
+        const prev = JSON.parse(lastSavedData);
+        if (prev.vacationMode === true && vacationMode === false) {
           fetch("/api/vacation/notify-return", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ creatorId: user.uid }),
           }).catch(err => console.error("Notify return error:", err));
         }
-        
-        setLastSavedData(currentData);
-        setSaved(true);
-        
-        // Haptic feedback for mobile
-        if (typeof navigator !== "undefined" && navigator.vibrate) {
-          navigator.vibrate(15);
-        }
-
-        setTimeout(() => setSaved(false), 3000);
-      } catch (e) {
-        console.error("Auto-save error:", e);
-      } finally {
-        setSaving(false);
       }
-    }, 1500);
-
-    return () => clearTimeout(t);
+      setLastSavedData(JSON.stringify({ vacationMode }));
+      setSaved(true);
+      if (typeof navigator !== "undefined" && navigator.vibrate) navigator.vibrate(15);
+      setTimeout(() => setSaved(false), 3000);
+    } catch (e) {
+      console.error("Save error:", e);
+    } finally {
+      setSaving(false);
+    }
   }, [
-    user, userProfile, perQ, monthly, currency, bio, tagline, displayName,
-    categories, responseTimeHours, subscriberPerks, socialLinks,
-    payoutMethod, pppEnabled, vacationMode, vacationUntil, vacationMessage, bankName, accountHolder, accountNumber,
-    bankCountry, ifscCode, swiftCode, paypalEmail, wiseEmail, lastSavedData
+    user, perQ, monthly, currency, bio, tagline, displayName, categories,
+    responseTimeHours, subscriberPerks, socialLinks, payoutMethod, pppEnabled,
+    vacationMode, vacationUntil, vacationMessage, bankName, accountHolder,
+    accountNumber, bankCountry, ifscCode, swiftCode, paypalEmail, wiseEmail, lastSavedData,
   ]);
 
   // ── Username check ────────────────────────────────────────────────────────
@@ -279,6 +218,6 @@ export function useProfileSettings() {
     vacationMode, setVacationMode,
     vacationUntil, setVacationUntil,
     vacationMessage, setVacationMessage,
-    saving, saved
+    saving, saved, saveNow
   };
 }

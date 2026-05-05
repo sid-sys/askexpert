@@ -62,9 +62,11 @@ service cloud.firestore {
       // Admins can do anything
       allow read, write: if isAdmin();
 
-      // Creator can read their own questions
+      // Creator can read their own questions; asker (fan) can read questions they submitted
       // Public can read answered questions that are marked as public
-      allow read: if (isAuth() && (resource == null || resource.data.creatorId == request.auth.uid)) 
+      allow read: if (isAuth() && (resource == null
+                                   || resource.data.creatorId == request.auth.uid
+                                   || resource.data.followerUid == request.auth.uid))
                   || (resource != null && resource.data.isPublicAnswer == true && resource.data.status == "ANSWERED");
       
       allow create: if true; // Follower creating a question via Stripe webhook or client

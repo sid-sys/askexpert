@@ -3,7 +3,7 @@
 import { useEffect, useState, useMemo } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { useRouter } from "next/navigation";
-import { collection, query, where, onSnapshot, orderBy } from "firebase/firestore";
+import { collection, query, where, onSnapshot, orderBy, getDocs } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import {
   FirestoreQuestion, COLLECTIONS, QuestionStatus,
@@ -12,7 +12,7 @@ import {
 import QuestionCard from "@/components/QuestionCard";
 import Swal from "sweetalert2";
 import { requestNotificationPermission } from "@/lib/fcm";
-import { doc, updateDoc, arrayUnion } from "firebase/firestore";
+import { doc, updateDoc, setDoc, arrayUnion } from "firebase/firestore";
 
 // Mock data removed for production testing
 
@@ -176,9 +176,9 @@ export default function DashboardPage() {
     const token = await requestNotificationPermission();
     if (token && user) {
       try {
-        await updateDoc(doc(db, COLLECTIONS.USERS, user.uid), {
+        await setDoc(doc(db, COLLECTIONS.USERS, user.uid), {
           fcmTokens: arrayUnion(token),
-        });
+        }, { merge: true });
         setShowNotifyBanner(false);
         Swal.fire({
           title: "Notifications Enabled! 🔔",
@@ -239,7 +239,7 @@ export default function DashboardPage() {
   const saveVacationSetting = async (field: "vacationMessage" | "vacationUntil", value: any) => {
     if (!user) return;
     try {
-      await updateDoc(doc(db, COLLECTIONS.USERS, user.uid), { [field]: value });
+      await setDoc(doc(db, COLLECTIONS.USERS, user.uid), { [field]: value }, { merge: true });
     } catch (err) {
       console.error(`Failed to save ${field}:`, err);
     }
@@ -251,7 +251,7 @@ export default function DashboardPage() {
     setVacationSaving(true);
     setVacationMode(next);
     try {
-      await updateDoc(doc(db, COLLECTIONS.USERS, user.uid), { vacationMode: next });
+      await setDoc(doc(db, COLLECTIONS.USERS, user.uid), { vacationMode: next }, { merge: true });
       Swal.fire({
         icon: next ? 'info' : 'success',
         title: next ? '🏖️ Vacation Mode ON' : '🏠 Welcome Back!',
@@ -362,7 +362,7 @@ export default function DashboardPage() {
       )}
 
       {/* HEADER */}
-      <div style={{ marginBottom: 28 }}>
+      <div style={{ marginBottom: 24 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
           <h1 style={{ fontFamily: "'Outfit', sans-serif", fontSize: "clamp(1.5rem,3vw,2rem)", fontWeight: 800, color: "#111", margin: 0 }}>
             Welcome back, {displayName} 👋
@@ -377,6 +377,9 @@ export default function DashboardPage() {
           Here&apos;s what&apos;s happening with your questions today.
         </p>
       </div>
+
+      {/* CREATOR VIEW */}
+      {<>
 
       {/* STAT CARDS */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: 12, marginBottom: 24 }}>
@@ -657,6 +660,7 @@ export default function DashboardPage() {
           ))}
         </div>
       )}
+      </>}
       </div>
     </div>
   );
