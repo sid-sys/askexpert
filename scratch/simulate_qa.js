@@ -36,8 +36,8 @@ async function simulateQA() {
       // Image 1 from Sky, Image 2 from Sidharth. 
       // We'll put both in attachmentUrls to simulate the rich text/files attached.
       attachmentUrls: [
-        "https://via.placeholder.com/800x600/333333/ffffff.png?text=Image+1+(CronJob)",
-        "https://via.placeholder.com/800x600/1e40af/ffffff.png?text=Image+2+(PlayConsole)"
+        "https://placehold.co/800x600/333333/ffffff.png?text=Image+1+(CronJob)",
+        "https://placehold.co/800x600/1e40af/ffffff.png?text=Image+2+(PlayConsole)"
       ],
       
       // Response from Sidharth

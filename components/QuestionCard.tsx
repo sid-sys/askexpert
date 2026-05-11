@@ -69,7 +69,8 @@ export default function QuestionCard({ question, onAnswered }: QuestionCardProps
   const [showDriveTip, setShowDriveTip] = useState(true);
 
   const statusStyle = STATUS_STYLES[optimisticStatus] ?? STATUS_STYLES.PENDING;
-  const initials = (question.followerName || question.followerEmail || "?")[0]?.toUpperCase();
+  const askerLabel = question.followerName?.trim() || "Anonymous";
+  const initials = (question.followerName?.trim() || "?")[0]?.toUpperCase();
   const timeAgo = getTimeAgo(question.createdAt);
   const hasContent = responseText.trim().length > 0 || attachedFiles.length > 0 || voiceBlob !== null;
   const charPercent = (responseText.length / CHAR_LIMIT) * 100;
@@ -240,7 +241,7 @@ export default function QuestionCard({ question, onAnswered }: QuestionCardProps
     const result = await Swal.fire({
       title: "Send this answer?",
       html: `<p style="color:#6b7280;font-size:0.92rem;line-height:1.6">
-        Your answer will be sent to <strong>${question.followerName || question.followerEmail}</strong> immediately via email. This action cannot be undone.
+        Your answer will be sent to <strong>${askerLabel}</strong> immediately via email. This action cannot be undone.
       </p>`,
       icon: "question",
       showCancelButton: true,
@@ -347,7 +348,7 @@ export default function QuestionCard({ question, onAnswered }: QuestionCardProps
 
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 4 }}>
-            <span style={{ fontWeight: 700, fontSize: "0.88rem", color: "#374151" }}>{question.followerName || question.followerEmail}</span>
+            <span style={{ fontWeight: 700, fontSize: "0.88rem", color: "#374151" }}>{askerLabel}</span>
             {question.isNew && (
               <span style={{ background: "#7c3aed", color: "#fff", borderRadius: 99, padding: "1px 10px", fontSize: "0.7rem", fontWeight: 800, letterSpacing: "0.05em" }}>NEW</span>
             )}
@@ -439,23 +440,36 @@ export default function QuestionCard({ question, onAnswered }: QuestionCardProps
           </button>
         )}
         {optimisticStatus === "ANSWERED" && question.id && (
-          <button type="button" disabled={togglingPublic} onClick={async () => {
-            setTogglingPublic(true);
-            try {
-              const next = !isPublic;
-              await updateDoc(doc(db, COLLECTIONS.QUESTIONS, question.id!), { 
-                isPublicAnswer: next,
-                updatedAt: serverTimestamp()
-              });
-              setIsPublic(next);
-            } catch { /* ignore */ } finally { setTogglingPublic(false); }
-          }} style={{
-            display: "flex", alignItems: "center", gap: 6,
-            background: isPublic ? "#dcfce7" : "#f9fafb", color: isPublic ? "#166534" : "#6b7280",
-            border: `1.5px solid ${isPublic ? "#bbf7d0" : "#e5e7eb"}`, borderRadius: 99, padding: "8px 18px",
-            fontWeight: 700, fontSize: "0.82rem", cursor: togglingPublic ? "not-allowed" : "pointer", transition: "all 0.2s",
-          }}>
-            {togglingPublic ? "…" : isPublic ? <><span style={{ fontSize: "0.9rem" }}>🌐</span> Public on Profile</> : <><span style={{ fontSize: "0.9rem" }}>🔒</span> Make Public</>}
+          <button
+            type="button"
+            disabled={togglingPublic}
+            title={isPublic
+              ? "This answer is visible on your public profile to anyone who visits it. Click to make it private again."
+              : "Publish this Q&A on your public profile so anyone visiting can read it. The asker stays anonymous. You can revert anytime."}
+            aria-pressed={isPublic}
+            onClick={async () => {
+              setTogglingPublic(true);
+              try {
+                const next = !isPublic;
+                await updateDoc(doc(db, COLLECTIONS.QUESTIONS, question.id!), {
+                  isPublicAnswer: next,
+                  updatedAt: serverTimestamp()
+                });
+                setIsPublic(next);
+              } catch { /* ignore */ } finally { setTogglingPublic(false); }
+            }}
+            style={{
+              display: "flex", alignItems: "center", gap: 6,
+              background: isPublic ? "#dcfce7" : "#f9fafb", color: isPublic ? "#166534" : "#6b7280",
+              border: `1.5px solid ${isPublic ? "#bbf7d0" : "#e5e7eb"}`, borderRadius: 99, padding: "8px 18px",
+              fontWeight: 700, fontSize: "0.82rem", cursor: togglingPublic ? "not-allowed" : "pointer", transition: "all 0.2s",
+            }}
+          >
+            {togglingPublic
+              ? "…"
+              : isPublic
+              ? <><span style={{ fontSize: "0.9rem" }}>🌐</span> Public on Profile · Click to make private</>
+              : <><span style={{ fontSize: "0.9rem" }}>🔒</span> Make Public</>}
           </button>
         )}
       </div>
@@ -786,46 +800,66 @@ function getTimeAgo(date: Date | unknown): string {
 import LiveTimer from "./LiveTimer";
 
 function renderAttachment(url: string, index: number) {
+  return <AttachmentPreview key={index} url={url} index={index} />;
+}
+
+function AttachmentLink({ url, index, label }: { url: string; index: number; label?: string }) {
+  return (
+    <a href={url} target="_blank" rel="noopener noreferrer" download
+      style={{
+        display: "inline-flex", alignItems: "center", gap: 6,
+        background: "#fff", border: "1px solid #bae6fd",
+        borderRadius: 8, padding: "6px 14px",
+        fontSize: "0.82rem", fontWeight: 600, color: "#0369a1",
+        textDecoration: "none", width: "fit-content", marginBottom: 8
+      }}
+    >
+      📎 {label || `View Attachment ${index + 1}`}
+    </a>
+  );
+}
+
+function AttachmentPreview({ url, index }: { url: string; index: number }) {
+  const [errored, setErrored] = useState(false);
   const lowerUrl = url.toLowerCase();
-  const isImage = lowerUrl.includes("image") || /\.(jpg|jpeg|png|gif|webp)(\?|$)/i.test(lowerUrl);
-  const isVideo = lowerUrl.includes("video") || /\.(mp4|webm|mov)(\?|$)/i.test(lowerUrl);
-  const isAudio = lowerUrl.includes("audio") || lowerUrl.includes("voice-questions") || /\.(mp3|ogg|wav|m4a)(\?|$)/i.test(lowerUrl);
+  const isImage = /\.(jpg|jpeg|png|gif|webp)(\?|$|%3F)/i.test(lowerUrl) || /image%2F|\/image\//i.test(lowerUrl);
+  const isVideo = /\.(mp4|webm|mov)(\?|$|%3F)/i.test(lowerUrl) || /video%2F|\/video\//i.test(lowerUrl);
+  const isAudio = /\.(mp3|ogg|wav|m4a|webm)(\?|$|%3F)/i.test(lowerUrl) || lowerUrl.includes("voice-questions") || /audio%2F|\/audio\//i.test(lowerUrl);
+
+  if (errored || (!isImage && !isVideo && !isAudio)) {
+    return <AttachmentLink url={url} index={index} />;
+  }
 
   if (isImage) {
     return (
-      <a key={index} href={url} target="_blank" rel="noopener noreferrer" style={{ display: "block", marginBottom: 8 }}>
-        <img src={url} alt={`Attachment ${index + 1}`} style={{ maxWidth: "100%", maxHeight: 300, borderRadius: 8, border: "1px solid #e5e7eb" }} />
+      <a href={url} target="_blank" rel="noopener noreferrer" style={{ display: "block", marginBottom: 8 }}>
+        <img
+          src={url}
+          alt={`Attachment ${index + 1}`}
+          onError={() => setErrored(true)}
+          style={{ maxWidth: "100%", maxHeight: 300, borderRadius: 8, border: "1px solid #e5e7eb" }}
+        />
       </a>
     );
-  } else if (isVideo) {
+  }
+  if (isVideo) {
     return (
-      <div key={index} style={{ marginBottom: 8 }}>
-        <video controls style={{ maxWidth: "100%", maxHeight: 300, borderRadius: 8, border: "1px solid #e5e7eb" }}>
+      <div style={{ marginBottom: 8 }}>
+        <video
+          controls
+          onError={() => setErrored(true)}
+          style={{ maxWidth: "100%", maxHeight: 300, borderRadius: 8, border: "1px solid #e5e7eb" }}
+        >
           <source src={url} />
           Your browser does not support the video tag.
         </video>
       </div>
     );
-  } else if (isAudio) {
-    return (
-      <div key={index} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
-        <span style={{ fontSize: "1.1rem" }}>🎙️</span>
-        <audio controls src={url} style={{ flex: 1, height: 36, borderRadius: 8 }} />
-      </div>
-    );
-  } else {
-    return (
-      <a key={index} href={url} target="_blank" rel="noopener noreferrer"
-        style={{
-          display: "inline-flex", alignItems: "center", gap: 6,
-          background: "#fff", border: "1px solid #bae6fd",
-          borderRadius: 8, padding: "6px 14px",
-          fontSize: "0.82rem", fontWeight: 600, color: "#0369a1",
-          textDecoration: "none", width: "fit-content", marginBottom: 8
-        }}
-      >
-        📎 View Attachment {index + 1}
-      </a>
-    );
   }
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+      <span style={{ fontSize: "1.1rem" }}>🎙️</span>
+      <audio controls src={url} onError={() => setErrored(true)} style={{ flex: 1, height: 36, borderRadius: 8 }} />
+    </div>
+  );
 }

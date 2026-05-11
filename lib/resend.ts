@@ -201,7 +201,7 @@ export async function sendAnswerEmail({
     } else if (answerType === "file") {
       answerBlock = `
         <p style="font-size:1rem;color:#1f2937;margin:0 0 12px;">${answer || "Your creator shared a file."}</p>
-        ${answerUrl ? `<a href="${answerUrl}" style="display:inline-block;background:#f5f3ff;color:#7c3aed;border-radius:99px;padding:10px 20px;font-weight:700;text-decoration:none;">📎 Download File</a>` : ""}`;
+        ${answerUrl ? `<a href="${answerUrl}" style="display:inline-block;background:#f5f3ff;color:#7c3aed;border-radius:99px;padding:10px 20px;font-weight:700;text-decoration:none;">📎 View File</a>` : ""}`;
     }
 
     let attachmentsBlock = "";

@@ -28,6 +28,20 @@ function getCutoff(r: DateRange) {
 // Mock chart data removed for production testing
 
 // ── HELPERS ────────────────────────────────────────────────────────────────
+function maskEmail(email: string | undefined): string {
+  if (!email) return "Anonymous";
+  const [local, domain] = email.split("@");
+  if (!domain) return "Anonymous";
+  const head = local.slice(0, 1);
+  return `${head}${"*".repeat(Math.max(1, local.length - 1))}@${domain}`;
+}
+
+function askerDisplayLabel(q: FirestoreQuestion): string {
+  const name = (q as any).followerName?.trim?.();
+  if (name) return name;
+  return maskEmail(q.followerEmail);
+}
+
 function groupByDay(questions: FirestoreQuestion[]) {
   const map: Record<string, { date: string; earned: number; questions: number }> = {};
   questions.forEach((q) => {
@@ -112,13 +126,14 @@ export default function AnalyticsPage() {
 
   const chartData = groupByDay(filteredQuestions);
   const topAskers = (() => {
-    const groups: Record<string, { email: string; count: number; totalSpent: number }> = {};
+    const groups: Record<string, { label: string; count: number; totalSpent: number }> = {};
     filteredQuestions.forEach(q => {
-      if (!groups[q.followerEmail]) {
-        groups[q.followerEmail] = { email: q.followerEmail, count: 0, totalSpent: 0 };
+      const key = q.followerEmail || "unknown";
+      if (!groups[key]) {
+        groups[key] = { label: askerDisplayLabel(q), count: 0, totalSpent: 0 };
       }
-      groups[q.followerEmail].count++;
-      groups[q.followerEmail].totalSpent += q.pricePaid;
+      groups[key].count++;
+      groups[key].totalSpent += q.pricePaid;
     });
     return Object.values(groups)
       .sort((a, b) => b.count - a.count)
@@ -210,10 +225,10 @@ export default function AnalyticsPage() {
         <div style={{ display: "flex", gap: 8 }} className="no-print">
           <button onClick={() => window.print()} style={{ padding: "0.5rem 1rem", borderRadius: 99, background: "#f3f4f6", border: "none", cursor: "pointer", fontFamily: "'Inter', sans-serif", fontWeight: 600, color: "#374151" }}>PDF Report</button>
           <button onClick={() => {
-            const header = ["Date", "Asker Email", "Status", "Amount", "Question"];
+            const header = ["Date", "Asker", "Status", "Amount", "Question"];
             const rows = filteredQuestions.map(q => [
               new Date(q.createdAt).toLocaleDateString(),
-              q.followerEmail,
+              askerDisplayLabel(q),
               q.status,
               `$${(q.pricePaid / 100).toFixed(2)}`,
               `"${(q.body || "").replace(/"/g, '""')}"`
@@ -461,7 +476,7 @@ export default function AnalyticsPage() {
                 border: "1px solid #f3f4f6",
               }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontFamily: "'Inter', sans-serif", fontSize: "0.88rem", fontWeight: 600, color: "#374151", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.email}</div>
+                  <div style={{ fontFamily: "'Inter', sans-serif", fontSize: "0.88rem", fontWeight: 600, color: "#374151", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.label}</div>
                   <div style={{ fontFamily: "'Inter', sans-serif", fontSize: "0.75rem", color: "#9ca3af", marginTop: 2 }}>{a.count} questions asked</div>
                 </div>
                 <div style={{ fontFamily: "'Outfit', sans-serif", fontSize: "1rem", fontWeight: 800, color: "#7c3aed", marginLeft: 12, whiteSpace: "nowrap" }}>

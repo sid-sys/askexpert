@@ -19,5 +19,14 @@ service firebase.storage {
                    && request.resource.size <= 50 * 1024 * 1024;
       allow read:  if request.auth != null;
     }
+
+    // ── Asker attachments — uploaded by the public visitor asking a question ──
+    // Anyone (authed or not) can upload, since asking is open to the public.
+    // Capped at 25 MB per file. Reads are open so the creator can view them
+    // from the dashboard and email links work without an active session.
+    match /asker_attachments/{fileName} {
+      allow write: if request.resource.size <= 25 * 1024 * 1024;
+      allow read:  if true;
+    }
   }
 }

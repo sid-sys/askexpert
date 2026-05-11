@@ -141,8 +141,9 @@ export default function CreatorProfilePage({ params }: { params: Promise<{ usern
   const [isSubscribing,    setIsSubscribing]    = useState(false);
 
   // Public Q&A
-  const [publicQA,   setPublicQA]   = useState<FirestoreQuestion[]>([]);
-  const [qaExpanded, setQaExpanded] = useState<Record<string, boolean>>({});
+  const [publicQA,         setPublicQA]         = useState<FirestoreQuestion[]>([]);
+  const [qaExpanded,       setQaExpanded]       = useState<Record<string, boolean>>({});
+  const [publicQaCollapsed, setPublicQaCollapsed] = useState(false);
 
   // Subscription state
   const [isSubscribed, setIsSubscribed] = useState(false);
@@ -210,25 +211,29 @@ export default function CreatorProfilePage({ params }: { params: Promise<{ usern
     if (isInsidePreviewIframe) return;
 
     let unsubscribe: (() => void) | undefined;
+    let qaFetched = false;
 
     const initListener = async () => {
+      const { onSnapshot } = await import("firebase/firestore");
       const q = query(
         collection(db, COLLECTIONS.USERS),
         where("username", "==", username)
       );
 
-      const snap = await getDocs(q);
-      if (snap.empty) {
-        setNotFoundFlag(true);
-        return;
-      }
-
-      const docId = snap.docs[0].id;
-
-      // Use onSnapshot for real-time updates
-      const { onSnapshot, doc } = await import("firebase/firestore");
-      unsubscribe = onSnapshot(doc(db, COLLECTIONS.USERS, docId), (docSnap) => {
-        if (docSnap.exists()) {
+      // Subscribe directly — onSnapshot auto-retries on transient network errors
+      // and is authoritative once the server responds. (Using getDocs() first
+      // could return snap.empty from a cold persistent cache and 404 incorrectly.)
+      unsubscribe = onSnapshot(
+        q,
+        { includeMetadataChanges: true },
+        (snap) => {
+          if (snap.empty) {
+            // Only trust an empty result once it's confirmed by the server,
+            // not while the SDK is still serving cached/local data.
+            if (!snap.metadata.fromCache) setNotFoundFlag(true);
+            return;
+          }
+          const docSnap = snap.docs[0];
           const raw = docSnap.data();
           const data = {
             ...raw as FirestoreUser,
@@ -237,13 +242,16 @@ export default function CreatorProfilePage({ params }: { params: Promise<{ usern
             vacationUntil: (raw as any).vacationUntil?.toDate?.() || null,
           };
           setCreator(data);
-          fetchPublicQA(data.uid);
-        } else {
-          setNotFoundFlag(true);
+          setNotFoundFlag(false);
+          if (!qaFetched) {
+            qaFetched = true;
+            fetchPublicQA(data.uid);
+          }
+        },
+        (err) => {
+          console.error("Firestore onSnapshot error:", err);
         }
-      }, (err) => {
-        console.error("Firestore onSnapshot error:", err);
-      });
+      );
     };
 
     const fetchPublicQA = async (creatorId: string) => {
@@ -1282,7 +1290,17 @@ export default function CreatorProfilePage({ params }: { params: Promise<{ usern
       {/* ══════════════════════════════════════════════════════ */}
       {publicQA.length > 0 && (
         <div id="public-qa" style={{ marginTop: 48 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
+          <button
+            type="button"
+            onClick={() => setPublicQaCollapsed(c => !c)}
+            aria-expanded={!publicQaCollapsed}
+            aria-controls="public-qa-list"
+            style={{
+              display: "flex", alignItems: "center", gap: 12, marginBottom: 20,
+              background: "none", border: "none", padding: 0, cursor: "pointer",
+              width: "100%", textAlign: "left",
+            }}
+          >
             <span style={{
               background: "#ede9fe", color: "var(--purple)",
               borderRadius: 99, padding: "4px 16px",
@@ -1294,9 +1312,16 @@ export default function CreatorProfilePage({ params }: { params: Promise<{ usern
             <span style={{ color: "var(--muted)", fontSize: "0.82rem" }}>
               {publicQA.length} answer{publicQA.length !== 1 ? "s" : ""} shared by {display.displayName}
             </span>
-          </div>
+            <span style={{
+              marginLeft: "auto", color: "var(--purple)", fontSize: "0.82rem", fontWeight: 700,
+              display: "inline-flex", alignItems: "center", gap: 4,
+            }}>
+              {publicQaCollapsed ? "Show" : "Hide"} <span style={{ transform: publicQaCollapsed ? "rotate(0deg)" : "rotate(180deg)", transition: "transform 0.2s" }}>▾</span>
+            </span>
+          </button>
 
-          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          {!publicQaCollapsed && (
+          <div id="public-qa-list" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
             {publicQA.map((qa) => {
               const exp = qaExpanded[qa.id!];
               return (
@@ -1374,8 +1399,8 @@ export default function CreatorProfilePage({ params }: { params: Promise<{ usern
               );
             })}
           </div>
+          )}
 
-          {/* CTA */}
           <div style={{
             marginTop: 28, textAlign: "center",
             border: "1.5px solid rgba(124,58,237,0.15)",
