@@ -1663,3 +1663,29 @@ button svg {
     margin-left: var(--sidebar-width, 232px); transition: margin-left 0.3s ease;
   }
 }
+
+/* Hide the WebKit/Chromium audio overflow ("⋮") menu so chat voice notes stay clean */
+audio::-webkit-media-controls-overflow-menu-button,
+audio::-webkit-media-controls-overflow-menu-list,
+audio::-internal-media-controls-overflow-button,
+audio::-internal-media-controls-overflow-button-internal-id {
+  display: none !important;
+  width: 0 !important;
+  visibility: hidden !important;
+}
+
+/* Print: hide chrome so PDF export contains only the report content */
+@media print {
+  .premium-sidebar,
+  .global-header,
+  .bottom-nav,
+  .mobile-bottom-nav,
+  .feedback-button,
+  .no-print {
+    display: none !important;
+  }
+  .app-shell.sidebar-offset {
+    margin-left: 0 !important;
+  }
+  html, body { background: #fff !important; }
+}

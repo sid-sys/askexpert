@@ -31,6 +31,18 @@ const URL_REGEX = /https?:\/\/[^\s<>"{}|\\^`[\]]+/gi;
 // Character limit for the response
 const CHAR_LIMIT = 5000;
 
+// Masks an email so the creator can recognise repeat askers without seeing the
+// full address. e.g. "admin@gmail.com" -> "adm***@gmail.com"
+function maskEmail(email: string | undefined | null): string {
+  if (!email) return "Anonymous";
+  const at = email.indexOf("@");
+  if (at <= 0) return "Anonymous";
+  const local = email.slice(0, at);
+  const domain = email.slice(at);
+  const visible = local.slice(0, Math.min(3, Math.max(1, local.length - 1)));
+  return `${visible}${"*".repeat(Math.max(3, local.length - visible.length))}${domain}`;
+}
+
 export default function QuestionCard({ question, onAnswered }: QuestionCardProps) {
   const [expanded, setExpanded] = useState(false);
   const [showForm, setShowForm] = useState(false);
@@ -69,8 +81,8 @@ export default function QuestionCard({ question, onAnswered }: QuestionCardProps
   const [showDriveTip, setShowDriveTip] = useState(true);
 
   const statusStyle = STATUS_STYLES[optimisticStatus] ?? STATUS_STYLES.PENDING;
-  const askerLabel = question.followerName?.trim() || "Anonymous";
-  const initials = (question.followerName?.trim() || "?")[0]?.toUpperCase();
+  const askerLabel = question.followerName?.trim() || maskEmail(question.followerEmail);
+  const initials = (question.followerName?.trim() || question.followerEmail || "?")[0]?.toUpperCase();
   const timeAgo = getTimeAgo(question.createdAt);
   const hasContent = responseText.trim().length > 0 || attachedFiles.length > 0 || voiceBlob !== null;
   const charPercent = (responseText.length / CHAR_LIMIT) * 100;
@@ -430,13 +442,13 @@ export default function QuestionCard({ question, onAnswered }: QuestionCardProps
 
       {/* CTA row — PENDING only, no edit */}
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
-        {optimisticStatus === "PENDING" && (
-          <button onClick={() => setShowForm(!showForm)} style={{
-            background: showForm ? "#f5f3ff" : "#7c3aed", color: showForm ? "#7c3aed" : "#fff",
+        {optimisticStatus === "PENDING" && !showForm && (
+          <button onClick={() => setShowForm(true)} style={{
+            background: "#7c3aed", color: "#fff",
             border: "none", borderRadius: 99, padding: "10px 22px", fontWeight: 700,
             fontSize: "0.85rem", cursor: "pointer", transition: "all 0.2s",
           }}>
-            {showForm ? "✕ Cancel" : "✏️ Answer"}
+            ✏️ Answer
           </button>
         )}
         {optimisticStatus === "ANSWERED" && question.id && (
@@ -481,12 +493,30 @@ export default function QuestionCard({ question, onAnswered }: QuestionCardProps
       {showForm && (
         <div
           ref={composerRef}
-          style={{ marginTop: 20, position: "relative" }}
+          style={{ marginTop: 12, position: "relative" }}
           onDragEnter={handleDragEnter}
           onDragLeave={handleDragLeave}
           onDragOver={handleDragOver}
           onDrop={handleDrop}
         >
+          {/* Tiny close button — top-right of the composer area */}
+          <button
+            type="button"
+            onClick={() => setShowForm(false)}
+            aria-label="Close composer"
+            title="Discard and close"
+            style={{
+              position: "absolute", top: -4, right: 0, zIndex: 10,
+              width: 26, height: 26, borderRadius: "50%",
+              border: "1px solid #e5e7eb", background: "#fff",
+              color: "#9ca3af", cursor: "pointer",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              fontSize: "0.85rem", lineHeight: 1, fontWeight: 600,
+              transition: "all 0.15s",
+            }}
+            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = "#f3f4f6"; (e.currentTarget as HTMLElement).style.color = "#374151"; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = "#fff"; (e.currentTarget as HTMLElement).style.color = "#9ca3af"; }}
+          >✕</button>
 
           {/* ── Drag overlay ── */}
           {dragging && (

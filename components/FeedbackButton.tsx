@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useRef, useEffect } from "react";
+import { usePathname } from "next/navigation";
 import { gsap } from "gsap";
 import Swal from "sweetalert2";
 
@@ -10,8 +11,12 @@ const isValidEmail = (email: string) => {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 };
 
+// Routes that own their own messaging UI and shouldn't be visually crowded
+// by the floating Feedback button (fans/fan-dashboard chat surfaces).
+const HIDDEN_ON = ["/fans", "/fan-dashboard"];
+
 export default function FeedbackButton() {
-  console.log("FeedbackButton v2.1 Active"); // Debug log
+  const pathname = usePathname();
 
   const btnRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -20,6 +25,10 @@ export default function FeedbackButton() {
   const [tab, setTab] = useState<Tab>("feedback");
   const [submitting, setSubmitting] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+
+  // Hide on chat-heavy routes. Done before any other hooks-after-conditional
+  // would matter — hooks below stay declared so React's rules still hold.
+  const hide = !!pathname && HIDDEN_ON.some(r => pathname === r || pathname.startsWith(r + "/"));
 
   useEffect(() => {
     const checkMobile = () => setIsMobile(window.innerWidth <= 900);
@@ -243,8 +252,10 @@ export default function FeedbackButton() {
     } as React.CSSProperties,
   };
 
+  if (hide) return null;
+
   return (
-    <div style={S.wrap}>
+    <div className="feedback-button" style={S.wrap}>
       {open && (
         <div ref={panelRef} style={S.panel}>
           <div style={S.panelHeader}>

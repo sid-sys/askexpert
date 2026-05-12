@@ -5,10 +5,10 @@ import { useAuth } from "@/context/AuthContext";
 import { useState, useEffect } from "react";
 import Swal from "sweetalert2";
 
-const APP_ROUTES = ["/dashboard", "/profile", "/analytics", "/admin", "/upgrade"];
+const APP_ROUTES = ["/dashboard", "/questions", "/fans", "/profile", "/analytics", "/admin", "/upgrade"];
 
 export default function BottomNav() {
-  const { user, userProfile, logout } = useAuth();
+  const { user, userProfile } = useAuth();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const tab = searchParams?.get("tab");
@@ -17,9 +17,7 @@ export default function BottomNav() {
   const [mounted, setMounted] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [isSmallMobile, setIsSmallMobile] = useState(false);
-  const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [showSettingsMenu, setShowSettingsMenu] = useState(false);
-  const [portalLoading, setPortalLoading] = useState(false);
 
   useEffect(() => {
     setMounted(true);
@@ -37,63 +35,12 @@ export default function BottomNav() {
   const show = user && isMobile && APP_ROUTES.some((r) => pathname?.startsWith(r));
   if (!show) return null;
 
-  const handleLogout = async () => {
-    await logout();
-    router.push("/");
-  };
-
-  const handleManagePlan = async () => {
-    if (!user) return;
-    setPortalLoading(true);
-    try {
-      const { getIdToken } = await import("firebase/auth");
-      const token = await getIdToken(user as any);
-      const res   = await fetch("/api/stripe/billing-portal", {
-        method:  "POST",
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Billing portal failed");
-      if (data.url) {
-        window.open(data.url, "_blank");
-      }
-    } catch (err: any) {
-      alert(err.message || "Could not open billing portal. Try again.");
-    } finally {
-      setPortalLoading(false);
-      setShowProfileMenu(false);
-    }
-  };
-
-  const handleDeleteAccount = async () => {
-    setShowProfileMenu(false);
-    const result = await Swal.fire({
-      title: "Delete Account?",
-      html: "This will <strong>permanently delete</strong> your account, profile, and all data.<br/><br/>This <u>cannot be undone</u>.",
-      icon: "warning",
-      showCancelButton: true,
-      confirmButtonColor: "#ef4444",
-      cancelButtonColor: "#6b7280",
-      confirmButtonText: "Yes, delete my account",
-      cancelButtonText: "Cancel",
-      reverseButtons: true,
-    });
-    if (result.isConfirmed) {
-      await Swal.fire({
-        title: "Request Submitted",
-        html: "Please email <strong>support@askexpert.live</strong> to complete your account deletion. We'll process it within 24 hours.",
-        icon: "info",
-        confirmButtonColor: "var(--purple)",
-        confirmButtonText: "Got it",
-      });
-    }
-  };
+  // Account actions (billing, delete, sign-out) now live on /upgrade.
 
   const handleCopyLink = () => {
     if (!userProfile?.username) return;
     const url = `${window.location.origin}/${userProfile.username}`;
     navigator.clipboard.writeText(url);
-    setShowProfileMenu(false);
     Swal.fire({
       icon: 'success',
       title: 'Link Copied!',
@@ -110,7 +57,7 @@ export default function BottomNav() {
 
   const isActive = (path: string, exact = false) => {
     const match = exact ? pathname === path : (pathname?.startsWith(path) ?? false);
-    return match && !showProfileMenu && !showSettingsMenu;
+    return match && !showSettingsMenu;
   };
 
   const navItems = [
@@ -123,6 +70,26 @@ export default function BottomNav() {
           <rect x="14" y="3" width="7" height="7" rx="1.5" fill="currentColor"/>
           <rect x="3" y="14" width="7" height="7" rx="1.5" fill="currentColor"/>
           <rect x="14" y="14" width="7" height="7" rx="1.5" fill="currentColor"/>
+        </svg>
+      ),
+    },
+    {
+      href: "/questions",
+      label: "Questions",
+      icon: (
+        <svg width="20" height="20" fill="none" viewBox="0 0 24 24">
+          <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round"/>
+        </svg>
+      ),
+    },
+    {
+      href: "/fans",
+      label: "Fans",
+      icon: (
+        <svg width="20" height="20" fill="none" viewBox="0 0 24 24">
+          <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+          <circle cx="9" cy="7" r="4" stroke="currentColor" strokeWidth="2"/>
+          <path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
         </svg>
       ),
     },
@@ -260,107 +227,9 @@ export default function BottomNav() {
         </>
       )}
 
-      {/* Profile Menu Modal/Popover */}
-      {showProfileMenu && (
-        <>
-          <div 
-            style={{ position: 'fixed', inset: 0, zIndex: 940 }}
-            onClick={() => setShowProfileMenu(false)}
-          />
-          <div style={{
-            position: "fixed",
-            bottom: "80px",
-            right: "16px",
-            background: "#1f2937",
-            borderRadius: 16,
-            padding: 12,
-            boxShadow: "0 10px 30px rgba(0,0,0,0.5)",
-            border: "1px solid rgba(167,139,250,0.2)",
-            zIndex: 999,
-            display: "flex",
-            flexDirection: "column",
-            gap: 8,
-            minWidth: 200,
-            animation: "slideUp 0.2s ease-out"
-          }}>
-            <div style={{ padding: "8px", borderBottom: "1px solid rgba(255,255,255,0.1)", marginBottom: "4px" }}>
-              <div style={{ color: "#fff", fontWeight: 700, fontSize: "0.9rem" }}>{userProfile?.displayName || userProfile?.username}</div>
-              <div style={{ color: "rgba(167,139,250,0.6)", fontSize: "0.75rem" }}>@{userProfile?.username}</div>
-            </div>
-
-            <Link
-              href="/upgrade"
-              onClick={() => setShowProfileMenu(false)}
-              style={{
-                width: "100%", padding: "10px", background: "linear-gradient(135deg, #7c3aed, #a855f7)",
-                border: "none", borderRadius: 8, color: "#fff", cursor: "pointer",
-                fontWeight: 600, fontSize: "0.85rem", textAlign: "left",
-                display: "flex", alignItems: "center", gap: 8, textDecoration: "none"
-              }}
-            >
-              🚀 Upgrade Plan
-            </Link>
-
-            <button
-              onClick={handleManagePlan}
-              disabled={portalLoading}
-              style={{
-                width: "100%", padding: "10px", background: "rgba(255,255,255,0.05)",
-                border: "none", borderRadius: 8, color: "#fff", cursor: "pointer",
-                fontWeight: 600, fontSize: "0.85rem", textAlign: "left",
-                display: "flex", alignItems: "center", gap: 8
-              }}
-            >
-              💳 {portalLoading ? "Opening..." : "Manage Billing & Cancel"}
-            </button>
-
-            <button
-              onClick={handleDeleteAccount}
-              style={{
-                width: "100%", padding: "10px", background: "rgba(239,68,68,0.1)",
-                border: "none", borderRadius: 8, color: "#fca5a5", cursor: "pointer",
-                fontWeight: 600, fontSize: "0.85rem", textAlign: "left",
-                display: "flex", alignItems: "center", gap: 8
-              }}
-            >
-              🗑️ Delete Account
-            </button>
-
-            <button
-              onClick={handleLogout}
-              style={{
-                width: "100%", padding: "10px", background: "rgba(239,68,68,0.1)",
-                border: "none", borderRadius: 8, color: "#fca5a5", cursor: "pointer",
-                fontWeight: 600, fontSize: "0.85rem", textAlign: "left",
-                display: "flex", alignItems: "center", gap: 8
-              }}
-            >
-              <svg width="18" height="18" fill="none" viewBox="0 0 24 24">
-                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-              Sign Out
-            </button>
-
-            <button
-              onClick={() => {
-                setShowProfileMenu(false);
-                window.dispatchEvent(new Event('open-feedback'));
-              }}
-              style={{
-                width: "100%", padding: "10px", background: "rgba(167,139,250,0.1)",
-                border: "none", borderRadius: 8, color: "#a78bfa", cursor: "pointer",
-                fontWeight: 600, fontSize: "0.85rem", textAlign: "left",
-                display: "flex", alignItems: "center", gap: 8
-              }}
-            >
-              <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-              </svg>
-              Feedback
-            </button>
-          </div>
-        </>
-      )}
+      {/* Profile popover removed — the avatar at the right of the bottom nav
+          now navigates straight to /upgrade where billing, sign-out, and
+          account-delete live. */}
 
       <nav 
         className="mobile-bottom-nav"
@@ -381,7 +250,7 @@ export default function BottomNav() {
       }}>
         {displayNavItems.map((item) => {
           const isSettingsActive = item.isSettings && (isActive("/profile") || isActive("/profile?tab=pricing") || isActive("/profile?tab=payout"));
-          const active = (isActive(item.href) || isSettingsActive) && !showProfileMenu;
+          const active = (isActive(item.href) || isSettingsActive);
           const highlighted = active || (item.isSettings && showSettingsMenu);
 
           if (item.isSettings) {
@@ -396,7 +265,7 @@ export default function BottomNav() {
                 style={{
                   display: "flex", flexDirection: "column", alignItems: "center", gap: 3,
                   padding: "8px 12px", borderRadius: 10, cursor: "pointer",
-                  color: highlighted ? "#a78bfa" : "rgba(161,161,170,0.6)",
+                  color: highlighted ? "#f59e0b" : "rgba(161,161,170,0.6)",
                   fontFamily: "'Outfit', sans-serif", fontSize: "0.62rem",
                   fontWeight: highlighted ? 700 : 500, transition: "all 0.18s ease",
                   minWidth: 56, flexShrink: 0, position: "relative",
@@ -408,7 +277,7 @@ export default function BottomNav() {
                     width: 24, height: 2, borderRadius: "0 0 4px 4px", background: "#7c3aed",
                   }} />
                 )}
-                <span style={{ color: highlighted ? "#a78bfa" : "rgba(161,161,170,0.55)" }}>
+                <span style={{ color: highlighted ? "#f59e0b" : "rgba(161,161,170,0.55)" }}>
                   {item.icon}
                 </span>
                 <span>{item.label}</span>
@@ -435,7 +304,7 @@ export default function BottomNav() {
                 padding: "8px 12px",
                 borderRadius: 10,
                 textDecoration: "none",
-                color: active ? "#a78bfa" : "rgba(161,161,170,0.6)",
+                color: active ? "#f59e0b" : "rgba(161,161,170,0.6)",
                 fontFamily: "'Outfit', sans-serif",
                 fontSize: "0.62rem",
                 fontWeight: active ? 700 : 500,
@@ -454,10 +323,10 @@ export default function BottomNav() {
                   width: 24,
                   height: 2,
                   borderRadius: "0 0 4px 4px",
-                  background: "#7c3aed",
+                  background: "#f59e0b",
                 }} />
               )}
-              <span style={{ color: active ? "#a78bfa" : "rgba(161,161,170,0.55)" }}>
+              <span style={{ color: active ? "#f59e0b" : "rgba(161,161,170,0.55)" }}>
                 {item.icon}
               </span>
               <span>{item.label}</span>
@@ -465,13 +334,14 @@ export default function BottomNav() {
           );
         })}
 
-        {/* User Profile Item */}
-        <div 
+        {/* User Profile Item — taps go straight to /upgrade where all the
+            account actions (billing, sign out, delete) now live. */}
+        <Link
+          href="/upgrade"
           onClick={() => {
             if (typeof navigator !== "undefined" && navigator.vibrate) {
               navigator.vibrate(8);
             }
-            setShowProfileMenu(!showProfileMenu);
             setShowSettingsMenu(false);
           }}
           style={{
@@ -482,12 +352,13 @@ export default function BottomNav() {
             padding: "8px 12px",
             borderRadius: 10,
             cursor: "pointer",
-            color: showProfileMenu ? "#a78bfa" : "rgba(161,161,170,0.6)",
+            color: pathname?.startsWith("/upgrade") ? "#f59e0b" : "rgba(161,161,170,0.6)",
             fontFamily: "'Outfit', sans-serif",
             fontSize: "0.62rem",
-            fontWeight: showProfileMenu ? 700 : 500,
+            fontWeight: pathname?.startsWith("/upgrade") ? 700 : 500,
             minWidth: 56,
             flexShrink: 0,
+            textDecoration: "none",
           }}
         >
           <div style={{
@@ -502,7 +373,7 @@ export default function BottomNav() {
           <span style={{ maxWidth: 44, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", textAlign: "center" }}>
             {userProfile?.displayName?.split(" ")[0] || userProfile?.username || "Me"}
           </span>
-        </div>
+        </Link>
       </nav>
 
       <style jsx global>{`

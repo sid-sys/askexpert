@@ -71,6 +71,7 @@ export async function sendNewQuestionEmail({
   creatorName,
   question,
   askerEmail,
+  askerName,
   price,
   category,
   requestedReplyFormat,
@@ -82,6 +83,7 @@ export async function sendNewQuestionEmail({
   creatorName: string;
   question: string;
   askerEmail: string;
+  askerName?: string;
   price: number;
   category?: string;
   requestedReplyFormat?: string;
@@ -89,6 +91,7 @@ export async function sendNewQuestionEmail({
   responseTimeHours?: number;
   attachmentUrls?: string[];
 }) {
+  const askerLabel = askerName?.trim() || maskEmail(askerEmail);
   try {
     const replyTag = requestedReplyFormat && requestedReplyFormat !== "text"
       ? `<span style="display:inline-block;background:#f5f3ff;color:#7c3aed;border-radius:99px;padding:3px 12px;font-size:0.78rem;font-weight:700;margin-bottom:16px;">
@@ -127,7 +130,7 @@ export async function sendNewQuestionEmail({
       <div style="display:flex;justify-content:space-between;align-items:center;background:#f9fafb;border-radius:12px;padding:16px 20px;margin-bottom:28px;">
         <div>
           <div style="font-size:0.75rem;color:#9ca3af;font-weight:600;text-transform:uppercase;margin-bottom:4px;">From</div>
-          <div style="font-size:0.9rem;color:#374151;font-weight:600;">${maskEmail(askerEmail)}</div>
+          <div style="font-size:0.9rem;color:#374151;font-weight:600;">${askerLabel}</div>
         </div>
         <div style="text-align:right;">
           <div style="font-size:0.75rem;color:#9ca3af;font-weight:600;text-transform:uppercase;margin-bottom:4px;">Paid</div>
@@ -145,7 +148,7 @@ export async function sendNewQuestionEmail({
     const res = await resend.emails.send({
       from: FROM,
       to,
-      subject: `💬 New question from ${maskEmail(askerEmail)} — $${(price / 100).toFixed(2)} earned`,
+      subject: `💬 New question from ${askerLabel} — $${(price / 100).toFixed(2)} earned`,
       html: emailWrapper(content),
     });
 
@@ -644,6 +647,154 @@ export async function sendVacationReturnEmail({
     return res;
   } catch (err: any) {
     await logNotification({ to, subject: "Vacation Return", type: "subscriber_notification", status: "error", error: { message: err.message } });
+    throw err;
+  }
+}
+
+// ── 9. Subscription confirmation → notify fan (subscriber) ───────────────────
+export async function sendSubscriptionConfirmationEmail({
+  to,
+  creatorName,
+  creatorUsername,
+  price,
+  currency = "usd",
+}: {
+  to: string;
+  creatorName: string;
+  creatorUsername?: string;
+  price: number;
+  currency?: string;
+}) {
+  try {
+    const priceFormatted = new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: currency.toUpperCase(),
+    }).format(price / 100);
+
+    const profileUrl = creatorUsername ? `${APP_URL}/${creatorUsername}` : APP_URL;
+
+    const content = `
+      <h2 style="font-size:1.4rem;font-weight:800;color:#1f2937;margin:0 0 8px;">You're subscribed! 🌟</h2>
+      <p style="color:#6b7280;font-size:0.92rem;margin:0 0 28px;">
+        Your monthly subscription to <strong style="color:#1f2937;">${creatorName}</strong> is now active.
+        Ask them anything — your questions are included for the next 30 days.
+      </p>
+
+      <div style="background:#f5f3ff;border-left:4px solid #7c3aed;border-radius:0 12px 12px 0;padding:20px 24px;margin-bottom:24px;">
+        <div style="font-size:0.75rem;font-weight:700;color:#7c3aed;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px;">Plan</div>
+        <p style="font-size:1rem;color:#1f2937;line-height:1.65;margin:0;font-weight:700;">${creatorName} — Monthly Subscription</p>
+        <p style="font-size:0.85rem;color:#6b7280;margin:6px 0 0;">Renews automatically every 30 days. Cancel anytime from your dashboard.</p>
+      </div>
+
+      <div style="display:flex;gap:12px;margin-bottom:28px;">
+        <div style="flex:1;background:#f9fafb;border-radius:12px;padding:16px;text-align:center;">
+          <div style="font-size:0.72rem;color:#9ca3af;font-weight:700;text-transform:uppercase;margin-bottom:6px;">Paid today</div>
+          <div style="font-size:1.3rem;font-weight:900;color:#7c3aed;">${priceFormatted}</div>
+        </div>
+        <div style="flex:1;background:#fffbeb;border-radius:12px;padding:16px;text-align:center;">
+          <div style="font-size:0.72rem;color:#9ca3af;font-weight:700;text-transform:uppercase;margin-bottom:6px;">Status</div>
+          <div style="font-size:1rem;font-weight:900;color:#d97706;">Active ✓</div>
+        </div>
+        <div style="flex:1;background:#f0fdf4;border-radius:12px;padding:16px;text-align:center;">
+          <div style="font-size:0.72rem;color:#9ca3af;font-weight:700;text-transform:uppercase;margin-bottom:6px;">Questions</div>
+          <div style="font-size:1rem;font-weight:900;color:#059669;">Unlimited</div>
+        </div>
+      </div>
+
+      <a href="${profileUrl}" style="display:block;background:#7c3aed;color:#fff;text-align:center;padding:16px 24px;border-radius:99px;font-weight:700;font-size:0.95rem;text-decoration:none;margin-bottom:10px;">
+        Ask ${creatorName} a Question →
+      </a>
+      <a href="${APP_URL}/fan-dashboard" style="display:block;color:#7c3aed;text-align:center;padding:10px;font-weight:600;font-size:0.85rem;text-decoration:none;">
+        Manage your subscriptions
+      </a>
+    `;
+
+    const res = await resend.emails.send({
+      from: FROM,
+      to,
+      subject: `🌟 Subscription confirmed — ${creatorName}`,
+      html: emailWrapper(content),
+    });
+
+    if (res.error) {
+      await logNotification({ to, subject: "Subscription Confirmed", type: "subscriber_notification", status: "error", error: res.error });
+    } else {
+      await logNotification({ to, subject: "Subscription Confirmed", type: "subscriber_notification", status: "success", metadata: { resendId: res.data?.id } });
+    }
+    return res;
+  } catch (err: any) {
+    await logNotification({ to, subject: "Subscription Confirmed", type: "subscriber_notification", status: "error", error: { message: err.message } });
+    throw err;
+  }
+}
+
+// ── 10. New subscriber → notify creator ──────────────────────────────────────
+export async function sendNewSubscriberEmail({
+  to,
+  creatorName,
+  subscriberEmail,
+  subscriberName,
+  price,
+  currency = "usd",
+  dashboardUrl,
+}: {
+  to: string;
+  creatorName: string;
+  subscriberEmail: string;
+  subscriberName?: string;
+  price: number;
+  currency?: string;
+  dashboardUrl?: string;
+}) {
+  try {
+    const priceFormatted = new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: currency.toUpperCase(),
+    }).format(price / 100);
+
+    const subscriberLabel = subscriberName?.trim() || maskEmail(subscriberEmail);
+    const fansUrl = dashboardUrl || `${APP_URL}/fans`;
+
+    const content = `
+      <h2 style="font-size:1.4rem;font-weight:800;color:#1f2937;margin:0 0 8px;">You have a new subscriber! 🌟</h2>
+      <p style="color:#6b7280;font-size:0.92rem;margin:0 0 28px;">
+        Hi ${creatorName}, <strong style="color:#1f2937;">${subscriberLabel}</strong> just subscribed to your monthly plan.
+        They can now ask you unlimited questions for the next 30 days.
+      </p>
+
+      <div style="display:flex;justify-content:space-between;align-items:center;background:#f9fafb;border-radius:12px;padding:16px 20px;margin-bottom:28px;">
+        <div>
+          <div style="font-size:0.75rem;color:#9ca3af;font-weight:600;text-transform:uppercase;margin-bottom:4px;">Subscriber</div>
+          <div style="font-size:0.9rem;color:#374151;font-weight:600;">${subscriberLabel}</div>
+        </div>
+        <div style="text-align:right;">
+          <div style="font-size:0.75rem;color:#9ca3af;font-weight:600;text-transform:uppercase;margin-bottom:4px;">Monthly</div>
+          <div style="font-size:1.2rem;color:#7c3aed;font-weight:900;">${priceFormatted}</div>
+        </div>
+      </div>
+
+      <a href="${fansUrl}"
+        style="display:block;background:#7c3aed;color:#fff;text-align:center;padding:16px 24px;border-radius:99px;font-weight:700;font-size:0.95rem;text-decoration:none;">
+        View Your Fans →
+      </a>
+      <p style="text-align:center;color:#9ca3af;font-size:0.78rem;margin-top:12px;">You'll be notified when they send their first question.</p>
+    `;
+
+    const res = await resend.emails.send({
+      from: FROM,
+      to,
+      subject: `🌟 New subscriber — ${subscriberLabel} (${priceFormatted}/mo)`,
+      html: emailWrapper(content),
+    });
+
+    if (res.error) {
+      await logNotification({ to, subject: "New Subscriber", type: "creator_notification", status: "error", error: res.error });
+    } else {
+      await logNotification({ to, subject: "New Subscriber", type: "creator_notification", status: "success", metadata: { resendId: res.data?.id } });
+    }
+    return res;
+  } catch (err: any) {
+    await logNotification({ to, subject: "New Subscriber", type: "creator_notification", status: "error", error: { message: err.message } });
     throw err;
   }
 }

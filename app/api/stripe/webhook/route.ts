@@ -3,7 +3,12 @@ import Stripe from "stripe";
 import { stripe } from "@/lib/stripe";
 import { adminDb, FieldValue } from "@/lib/firebase-admin";
 import { sendPushNotification } from "@/lib/notifications";
-import { sendAskerConfirmationEmail, sendNewQuestionEmail } from "@/lib/resend";
+import {
+  sendAskerConfirmationEmail,
+  sendNewQuestionEmail,
+  sendSubscriptionConfirmationEmail,
+  sendNewSubscriberEmail,
+} from "@/lib/resend";
 
 
 export async function POST(req: NextRequest) {
@@ -46,6 +51,162 @@ export async function POST(req: NextRequest) {
     // ── Only process our question/subscription checkouts ──────────────────
     if (!meta?.questionId) {
       console.log("ℹ️ No questionId in metadata. Likely a platform plan checkout.");
+      return NextResponse.json({ ok: true });
+    }
+
+    // ── Subscription checkout (monthly fan → creator) ──────────────────────
+    // This flow creates a subscription doc (no question doc) and fires
+    // subscription-specific emails. The standalone "question" semantics are
+    // only used for one-time payments.
+    if (session.mode === "subscription") {
+      try {
+        const {
+          creatorId, creatorName, followerEmail, followerName,
+          followerUid, pricePaid, currency,
+        } = meta as Record<string, string>;
+
+        const creatorSnap = await adminDb.collection("users").doc(creatorId).get();
+        const creatorData = creatorSnap.data() ?? {};
+        const stripeCustomerId =
+          typeof session.customer === "string" ? session.customer : session.customer?.id ?? null;
+        const stripeSubscriptionId =
+          typeof session.subscription === "string" ? session.subscription : session.subscription?.id ?? null;
+
+        // Idempotency: if a sub doc for this Stripe subscription already exists, skip.
+        if (stripeSubscriptionId) {
+          const existing = await adminDb
+            .collection("subscriptions")
+            .where("stripeSubscriptionId", "==", stripeSubscriptionId)
+            .limit(1)
+            .get();
+          if (!existing.empty) {
+            console.log(`⏩ Subscription ${stripeSubscriptionId} already recorded. Skipping.`);
+            return NextResponse.json({ ok: true, duplicate: true });
+          }
+        }
+
+        await adminDb.collection("subscriptions").add({
+          creatorId,
+          creatorName: creatorName || creatorData.displayName || "Creator",
+          creatorUsername: creatorData.username || null,
+          followerId: followerUid || null,
+          followerEmail,
+          followerName: followerName || null,
+          status: "active",
+          pricePerMonth: parseInt(pricePaid),
+          currency: currency ?? "usd",
+          stripeCustomerId,
+          stripeSubscriptionId,
+          stripeSessionId: session.id,
+          createdAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
+          cancelledAt: null,
+        });
+
+        // Persist the Stripe customer on the fan's user doc so the billing
+        // portal can be opened for managing/cancelling later.
+        if (followerUid && stripeCustomerId) {
+          await adminDb.collection("users").doc(followerUid).set(
+            { stripeCustomerId, updatedAt: FieldValue.serverTimestamp() },
+            { merge: true }
+          );
+        }
+
+        // ── Count the subscription payment toward creator earnings ──────────
+        // (Mirrors the one-time question flow so subscriptions affect the
+        // creator's payout threshold and pendingPayoutBalance.)
+        const grossCents = parseInt(pricePaid);
+        await adminDb.collection("users").doc(creatorId).set(
+          {
+            totalEarnings: FieldValue.increment(grossCents),
+            updatedAt: FieldValue.serverTimestamp(),
+          },
+          { merge: true }
+        );
+
+        const platformPlan = (creatorData.platformPlan ?? "free") as string;
+        const payoutMethod = (creatorData.payoutMethod ?? "manual_bank") as string;
+        if (payoutMethod === "manual_bank") {
+          const feePercent = parseFloat(meta.feePercent ?? "15");
+          const feeCents = Math.round(grossCents * (feePercent / 100));
+          const creatorNetCents = grossCents - feeCents;
+
+          await adminDb.collection("pendingPayouts").add({
+            creatorId,
+            creatorName: creatorData.displayName ?? creatorName ?? "",
+            creatorEmail: creatorData.email ?? "",
+            amount: creatorNetCents,
+            platformFeeAmount: feeCents,
+            totalPaid: grossCents,
+            currency: currency ?? "usd",
+            paymentType: "subscription",
+            stripeSubscriptionId,
+            stripeSessionId: session.id,
+            status: "pending",
+            bankDetails: creatorData.bankDetails ?? null,
+            createdAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
+            paidAt: null,
+            notes: "",
+          });
+
+          await adminDb.collection("users").doc(creatorId).set(
+            {
+              pendingPayoutBalance: FieldValue.increment(creatorNetCents),
+              updatedAt: FieldValue.serverTimestamp(),
+            },
+            { merge: true }
+          );
+        }
+
+        const results = await Promise.all([
+          (async () => {
+            try {
+              await sendPushNotification({
+                uid: creatorId,
+                title: `🌟 New subscriber from ${followerName?.trim() || "a fan"}`,
+                body: `${followerName?.trim() || followerEmail} just subscribed to your monthly plan.`,
+                link: "/fans",
+              });
+              return "push_sent";
+            } catch (e: any) { return `push_error: ${e.message}`; }
+          })(),
+          (async () => {
+            try {
+              await sendSubscriptionConfirmationEmail({
+                to: followerEmail,
+                creatorName: creatorName || creatorData.displayName || "your expert",
+                creatorUsername: creatorData.username,
+                price: parseInt(pricePaid),
+                currency: currency ?? "usd",
+              });
+              return "fan_email_sent";
+            } catch (e: any) { return `fan_email_error: ${e.message}`; }
+          })(),
+          (async () => {
+            try {
+              if (creatorData?.email) {
+                await sendNewSubscriberEmail({
+                  to: creatorData.email,
+                  creatorName: creatorData.displayName || creatorName || "Creator",
+                  subscriberEmail: followerEmail,
+                  subscriberName: followerName,
+                  price: parseInt(pricePaid),
+                  currency: currency ?? "usd",
+                  dashboardUrl: `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/fans`,
+                });
+                return "creator_email_sent";
+              }
+              return "creator_email_skipped";
+            } catch (e: any) { return `creator_email_error: ${e.message}`; }
+          })(),
+        ]);
+
+        console.log(`✅ [Webhook] Subscription processed:`, results);
+      } catch (err: any) {
+        console.error(`❌ [Webhook] Subscription processing failed:`, err.message, err.stack);
+        return new NextResponse(`Processing Error: ${err.message}`, { status: 500 });
+      }
       return NextResponse.json({ ok: true });
     }
 
@@ -174,9 +335,9 @@ export async function POST(req: NextRequest) {
           try {
             await sendPushNotification({
               uid:   creatorId,
-              title: "💰 New Question Paid!",
-              body:  `Someone paid to ask: "${(content ?? "").slice(0, 80)}..."`,
-              link:  "/dashboard",
+              title: `💰 New question from ${followerName?.trim() || "a fan"}`,
+              body:  `"${(content ?? "").slice(0, 80)}..."`,
+              link:  "/questions",
             });
             return "push_sent";
           } catch (e: any) {
@@ -213,6 +374,7 @@ export async function POST(req: NextRequest) {
                 creatorName: creatorData.displayName || creatorName || "Creator",
                 question: content || "",
                 askerEmail: followerEmail,
+                askerName: followerName,
                 price: parseInt(pricePaid),
                 category: meta.category,
                 requestedReplyFormat: meta.requestedReplyFormat,
@@ -285,17 +447,36 @@ export async function POST(req: NextRequest) {
     const sub  = event.data.object as Stripe.Subscription;
     const meta = sub.metadata;
 
-    if (!meta?.uid) return NextResponse.json({ ok: true });
+    // 3a. Platform plan subscription (creator's own AskExpert plan)
+    if (meta?.uid) {
+      await adminDb.collection("users").doc(meta.uid).set(
+        {
+          platformPlan: "free",
+          platformPlanStripeSubId: null,
+          updatedAt: FieldValue.serverTimestamp()
+        },
+        { merge: true }
+      );
+      console.log(`⬇️  Creator ${meta.uid} downgraded to free (subscription cancelled)`);
+      return NextResponse.json({ ok: true });
+    }
 
-    await adminDb.collection("users").doc(meta.uid).set(
-      { 
-        platformPlan: "free", 
-        platformPlanStripeSubId: null,
-        updatedAt: FieldValue.serverTimestamp() 
-      },
-      { merge: true }
-    );
-    console.log(`⬇️  Creator ${meta.uid} downgraded to free (subscription cancelled)`);
+    // 3b. Fan → creator subscription. No metadata on the Stripe sub itself;
+    // match on stripeSubscriptionId stored in our subscriptions collection.
+    const fanSubSnap = await adminDb
+      .collection("subscriptions")
+      .where("stripeSubscriptionId", "==", sub.id)
+      .limit(1)
+      .get();
+    if (!fanSubSnap.empty) {
+      const subDoc = fanSubSnap.docs[0];
+      await subDoc.ref.update({
+        status: "cancelled",
+        cancelledAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      console.log(`⬇️  Fan subscription ${sub.id} marked cancelled.`);
+    }
   }
 
   // ─────────────────────────────────────────────────────────────────────────

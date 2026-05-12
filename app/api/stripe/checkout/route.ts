@@ -135,7 +135,11 @@ export async function POST(req: NextRequest) {
         },
       ],
       customer_email: followerEmail as string,
-      success_url: `${process.env.NEXT_PUBLIC_APP_URL}/success?session_id={CHECKOUT_SESSION_ID}`,
+      // After a subscription checkout, skip the standalone confirmation page and
+      // drop the new subscriber straight into their fan dashboard. session_id is
+      // still appended so the dashboard can run the same fallback sync if the
+      // webhook hasn't landed yet.
+      success_url: `${process.env.NEXT_PUBLIC_APP_URL}/fan-dashboard?session_id={CHECKOUT_SESSION_ID}&subscribed=1`,
       cancel_url:  `${process.env.NEXT_PUBLIC_APP_URL}/`,
       metadata: commonMetadata,
       // automatic_tax: { enabled: true },

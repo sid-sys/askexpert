@@ -1122,7 +1122,7 @@ export default function CreatorProfilePage({ params }: { params: Promise<{ usern
       {/* ══════════════════════════════════════════════════════ */}
       <div style={{ ...SECTION, background: "#fff" }} id="ask">
         <p style={SECTION_TITLE}>✉️ Ask a Question</p>
-        {payMode === "monthly" && !isSubscribed && !(user && user.uid === display.uid) ? (
+        {payMode === "monthly" && !isSubscribed ? (
           <div style={{ textAlign: "center", padding: "32px 16px" }}>
             <div style={{ fontSize: "3rem", marginBottom: 16 }}>🌟</div>
             <h3 style={{ fontWeight: 800, fontSize: "1.25rem", color: "#1f2937", margin: "0 0 8px" }}>
@@ -1142,7 +1142,9 @@ export default function CreatorProfilePage({ params }: { params: Promise<{ usern
                 opacity: submitting ? 0.7 : 1,
               }}
             >
-              {!user ? "Sign Up & Subscribe →" : `Subscribe ${currencySymbol}${(((display.monthlyPrice || 0) * pppFactor) / 100).toFixed(2)}/mo →`}
+              {!user
+                ? "Sign Up & Subscribe →"
+                : `Subscribe & Ask ${currencySymbol}${(((display.monthlyPrice || 0) * pppFactor) / 100).toFixed(2)}/mo →`}
             </button>
           </div>
         ) : (<>

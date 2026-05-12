@@ -28,5 +28,15 @@ service firebase.storage {
       allow write: if request.resource.size <= 25 * 1024 * 1024;
       allow read:  if true;
     }
+
+    // ── Chat attachments between a creator and a subscriber ──────────────────
+    // Both parties upload here (images, files, voice notes). Reads are open so
+    // the chat UI can render them straight from the bucket URL; writes require
+    // auth and a 25 MB cap.
+    match /chat_attachments/{subscriptionId}/{fileName} {
+      allow write: if request.auth != null
+                   && request.resource.size <= 25 * 1024 * 1024;
+      allow read:  if true;
+    }
   }
 }

@@ -39,7 +39,15 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const returnUrl = `${process.env.NEXT_PUBLIC_APP_URL}/profile?billing=updated`;
+    // Allow callers (e.g. fan dashboard) to override the return path. Fall back
+    // to the creator-side profile page for backward compatibility.
+    let customReturn = "";
+    try {
+      const body = await req.json().catch(() => null);
+      if (body && typeof body.returnUrl === "string") customReturn = body.returnUrl;
+    } catch { /* no body */ }
+    const safeReturn = customReturn && customReturn.startsWith("/") ? customReturn : "/profile?billing=updated";
+    const returnUrl = `${process.env.NEXT_PUBLIC_APP_URL}${safeReturn}`;
 
     const session = await stripe.billingPortal.sessions.create({
       customer:   customerId,

@@ -38,7 +38,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en" data-scroll-behavior="smooth" suppressHydrationWarning>
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
@@ -55,7 +55,11 @@ export default function RootLayout({
             <SidebarShell>
               <VacationBanner />
               <NavBar />
-              <main style={{ flex: 1 }}>{children}</main>
+              {/* main is a flex column so children that opt into `flex: 1` +
+                  `min-height: 0` (e.g. the chat pages) can size themselves to
+                  exactly the remaining viewport without overflowing. Regular
+                  pages with intrinsic content still render normally. */}
+              <main style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>{children}</main>
               <Footer />
             </SidebarShell>
 

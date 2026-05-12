@@ -2,7 +2,7 @@
 import { useAuth } from "@/context/AuthContext";
 import { usePathname } from "next/navigation";
 
-const APP_ROUTES = ["/dashboard", "/profile", "/analytics", "/admin"];
+const APP_ROUTES = ["/dashboard", "/questions", "/fans", "/profile", "/analytics", "/admin", "/upgrade"];
 
 export default function SidebarShell({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();

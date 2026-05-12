@@ -4,11 +4,12 @@ import { useAuth } from "@/context/AuthContext";
 import { useProfileSettings } from "@/app/profile/useProfileSettings";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import Swal from "sweetalert2";
 
 export default function UpgradePage() {
-  const { user, userProfile, loading } = useAuth();
+  const { user, userProfile, loading, logout } = useAuth();
   const router = useRouter();
-  
+
   const [portalLoading, setPortalLoading] = useState(false);
 
   useEffect(() => {
@@ -41,8 +42,36 @@ export default function UpgradePage() {
     }
   };
 
+  const handleDeleteAccount = async () => {
+    const result = await Swal.fire({
+      title: "Delete Account?",
+      html: "This will <strong>permanently delete</strong> your account, profile, and all data.<br/><br/>This <u>cannot be undone</u>.",
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonColor: "#ef4444",
+      cancelButtonColor: "#6b7280",
+      confirmButtonText: "Yes, delete my account",
+      cancelButtonText: "Cancel",
+      reverseButtons: true,
+    });
+    if (result.isConfirmed) {
+      await Swal.fire({
+        title: "Request Submitted",
+        html: "Please email <strong>support@askexpert.live</strong> to complete your account deletion. We'll process it within 24 hours.",
+        icon: "info",
+        confirmButtonColor: "var(--purple)",
+        confirmButtonText: "Got it",
+      });
+    }
+  };
+
+  const handleLogout = async () => {
+    await logout();
+    router.push("/");
+  };
+
   return (
-    <div style={{ maxWidth: 980, margin: "0 auto", padding: "40px 24px" }}>
+    <div style={{ maxWidth: 1180, margin: "0 auto", padding: "40px 24px" }}>
       <div className="card-brutal">
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
           <div style={{ background: "var(--purple-light)", color: "var(--purple)", width: 40, height: 40, borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.2rem", border: "2px solid rgba(124,58,237,0.2)" }}>🚀</div>
@@ -50,7 +79,10 @@ export default function UpgradePage() {
         </div>
         <p style={{ color: "var(--text-muted)", fontSize: "0.95rem", marginBottom: 30, maxWidth: 500 }}>Your plan determines your platform fee. Upgrade to keep more of what you earn and unlock premium features.</p>
 
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 20 }}>
+        {/* 3-column grid on desktop, collapses to a single column below 720px.
+            `minmax(0, 1fr)` lets each card shrink to fit instead of insisting
+            on its content's intrinsic width, so all three sit on one line. */}
+        <div className="upgrade-plans-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 16, alignItems: "stretch" }}>
           {([
             {
               plan: "free" as const, label: "Free", price: "$0", period: "forever",
@@ -58,8 +90,11 @@ export default function UpgradePage() {
               perks: ["Public creator profile", "Unlimited questions", "Pay-per-question & monthly sub", "Up to $1,000/mo earnings"],
             },
             {
+              // Explicit rgba on the badge background so it's reliably light
+              // violet (the `--purple-light` token was rendering nearly solid
+              // and swallowing the purple text on top of it).
               plan: "creator" as const, label: "Creator", price: "$4.99", period: "per month",
-              fee: "5%", feeLabel: "per transaction", accent: "var(--purple)", accentBg: "var(--purple-light)",
+              fee: "5%", feeLabel: "per transaction", accent: "#7c3aed", accentBg: "rgba(124,58,237,0.12)",
               perks: ["Everything in Free", "Custom profile branding", "Priority support", "Up to $10,000/mo earnings"],
             },
             {
@@ -124,6 +159,104 @@ export default function UpgradePage() {
           })}
         </div>
       </div>
+
+      {/* Account actions — billing, sign out, danger zone. Moved here so the
+          sidebar avatar can navigate directly instead of opening a popover. */}
+      <div className="card-brutal" style={{ marginTop: 24 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
+          <div style={{ background: "rgba(124,58,237,0.12)", color: "#7c3aed", width: 40, height: 40, borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.2rem", border: "2px solid rgba(124,58,237,0.2)" }}>⚙️</div>
+          <h2 className="font-display" style={{ fontSize: "1.4rem", color: "var(--text-dark)", margin: 0 }}>Account</h2>
+        </div>
+        <p style={{ color: "var(--text-muted)", fontSize: "0.9rem", marginBottom: 24 }}>
+          Manage your billing, sign out, or close your account.
+        </p>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          {/* Manage Billing & Cancel */}
+          <button
+            type="button"
+            onClick={handleManagePlan}
+            disabled={portalLoading}
+            style={{
+              display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12,
+              width: "100%", padding: "14px 18px", borderRadius: 12,
+              border: "1.5px solid var(--border)", background: "#fff",
+              cursor: portalLoading ? "wait" : "pointer",
+              transition: "all 0.18s",
+              fontFamily: "inherit", textAlign: "left",
+            }}
+            onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = "#c4b5fd"; (e.currentTarget as HTMLButtonElement).style.background = "#faf5ff"; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = "var(--border)"; (e.currentTarget as HTMLButtonElement).style.background = "#fff"; }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <span style={{ fontSize: "1.3rem" }}>💳</span>
+              <div>
+                <div style={{ fontWeight: 800, color: "var(--text-dark)", fontSize: "0.95rem" }}>Manage Billing & Cancel</div>
+                <div style={{ color: "var(--text-muted)", fontSize: "0.82rem", marginTop: 2 }}>Update payment method, view invoices, or cancel your plan</div>
+              </div>
+            </div>
+            <span style={{ color: "#7c3aed", fontWeight: 700, fontSize: "0.85rem", whiteSpace: "nowrap" }}>
+              {portalLoading ? "Opening…" : "Open Portal →"}
+            </span>
+          </button>
+
+          {/* Sign Out */}
+          <button
+            type="button"
+            onClick={handleLogout}
+            style={{
+              display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12,
+              width: "100%", padding: "14px 18px", borderRadius: 12,
+              border: "1.5px solid var(--border)", background: "#fff",
+              cursor: "pointer", transition: "all 0.18s",
+              fontFamily: "inherit", textAlign: "left",
+            }}
+            onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = "#cbd5e1"; (e.currentTarget as HTMLButtonElement).style.background = "#f9fafb"; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = "var(--border)"; (e.currentTarget as HTMLButtonElement).style.background = "#fff"; }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <span style={{ fontSize: "1.3rem" }}>🚪</span>
+              <div>
+                <div style={{ fontWeight: 800, color: "var(--text-dark)", fontSize: "0.95rem" }}>Sign Out</div>
+                <div style={{ color: "var(--text-muted)", fontSize: "0.82rem", marginTop: 2 }}>End your session on this device</div>
+              </div>
+            </div>
+            <span style={{ color: "#6b7280", fontWeight: 700, fontSize: "0.85rem" }}>→</span>
+          </button>
+
+          {/* Danger — Delete Account */}
+          <button
+            type="button"
+            onClick={handleDeleteAccount}
+            style={{
+              display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12,
+              width: "100%", padding: "14px 18px", borderRadius: 12,
+              border: "1.5px solid #fecaca", background: "#fff",
+              cursor: "pointer", transition: "all 0.18s",
+              fontFamily: "inherit", textAlign: "left",
+            }}
+            onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = "#fef2f2"; (e.currentTarget as HTMLButtonElement).style.borderColor = "#fca5a5"; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = "#fff"; (e.currentTarget as HTMLButtonElement).style.borderColor = "#fecaca"; }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <span style={{ fontSize: "1.3rem" }}>🗑️</span>
+              <div>
+                <div style={{ fontWeight: 800, color: "#b91c1c", fontSize: "0.95rem" }}>Delete Account</div>
+                <div style={{ color: "#b91c1c", opacity: 0.7, fontSize: "0.82rem", marginTop: 2 }}>Permanently delete your account and all data</div>
+              </div>
+            </div>
+            <span style={{ color: "#b91c1c", fontWeight: 700, fontSize: "0.85rem" }}>→</span>
+          </button>
+        </div>
+      </div>
+
+      <style jsx>{`
+        @media (max-width: 720px) {
+          :global(.upgrade-plans-grid) {
+            grid-template-columns: 1fr !important;
+          }
+        }
+      `}</style>
     </div>
   );
 }

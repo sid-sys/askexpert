@@ -57,6 +57,10 @@ export default function NavBar() {
   // Hide on the standalone asker success page — no creator nav needed
   if (pathname?.startsWith("/success")) return null;
 
+  // Hide on chat-heavy surfaces so the chat panel can bind itself to the
+  // viewport without competing with a horizontal nav above.
+  if (pathname?.startsWith("/fans") || pathname?.startsWith("/fan-dashboard") || pathname?.startsWith("/questions")) return null;
+
 
   const isActive = (path: string) => {
     if (path === "/" && pathname === "/") return true;
@@ -112,38 +116,8 @@ export default function NavBar() {
         {loading ? (
           <div style={{ width: 150, height: 40, background: "rgba(0,0,0,0.04)", borderRadius: 99 }} />
         ) : !user ? (
-          // ── Public / unauthenticated ───────────────────────────────────
-          <>
-            <Link href="#how-it-works" className="nav-link">How it works</Link>
-            <Link href="#features" className="nav-link">Features</Link>
-            <Link href="#pricing" className="nav-link">Pricing</Link>
-            <Link href="/login" className="nav-link">Log in</Link>
-            <Link href="/signup" style={{
-              background: "linear-gradient(135deg, #7c3aed, #a855f7)",
-              color: "#fff",
-              borderRadius: "99px",
-              padding: "0.75rem 1.75rem",
-              fontFamily: "'Inter', sans-serif",
-              fontWeight: 800,
-              fontSize: "0.9rem",
-              textDecoration: "none",
-              display: "flex",
-              alignItems: "center",
-              gap: "0.5rem",
-              boxShadow: "0 8px 20px rgba(124,58,237,0.25)",
-              transition: "all 0.3s ease",
-            }}
-            onMouseEnter={e => {
-              (e.currentTarget as HTMLElement).style.transform = "translateY(-2px)";
-              (e.currentTarget as HTMLElement).style.boxShadow = "0 12px 25px rgba(124,58,237,0.35)";
-            }}
-            onMouseLeave={e => {
-              (e.currentTarget as HTMLElement).style.transform = "";
-              (e.currentTarget as HTMLElement).style.boxShadow = "0 8px 20px rgba(124,58,237,0.25)";
-            }}>
-              Get Started →
-            </Link>
-          </>
+          // ── Public / unauthenticated: render nothing on the top-right ──
+          null
         ) : (
           // ── Authenticated: sidebar handles nav; show only top-bar extras ─
           <>
@@ -209,6 +183,35 @@ export default function NavBar() {
               </button>
               </>
             )}
+            <Link
+              href="/dashboard"
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+                padding: "0.5rem 1.1rem",
+                borderRadius: 99,
+                background: "linear-gradient(135deg, #7c3aed, #a855f7)",
+                color: "#fff",
+                fontFamily: "'Inter', sans-serif",
+                fontWeight: 800,
+                fontSize: "0.82rem",
+                textDecoration: "none",
+                boxShadow: "0 4px 12px rgba(124,58,237,0.3)",
+                transition: "all 0.2s",
+              }}
+              onMouseEnter={e => {
+                (e.currentTarget as HTMLElement).style.transform = "translateY(-1px)";
+                (e.currentTarget as HTMLElement).style.boxShadow = "0 8px 18px rgba(124,58,237,0.4)";
+              }}
+              onMouseLeave={e => {
+                (e.currentTarget as HTMLElement).style.transform = "";
+                (e.currentTarget as HTMLElement).style.boxShadow = "0 4px 12px rgba(124,58,237,0.3)";
+              }}
+            >
+              <span className="nav-btn-text">📊 Dashboard</span>
+              <span className="nav-btn-icon">📊</span>
+            </Link>
           </>
         )}
       </nav>

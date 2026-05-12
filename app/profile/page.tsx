@@ -324,20 +324,25 @@ function SettingsContent() {
           </h1>
           <p style={{ color: "var(--muted)", margin: 0 }}>Manage your public profile</p>
         </div>
-        <button
-          id="btn-preview-toggle"
-          onClick={() => setPreviewVisible(v => !v)}
-          style={{
-            padding: "0.6rem 1.4rem", fontWeight: 700, fontSize: "0.85rem",
-            border: `1.5px solid ${previewVisible ? "#7c3aed" : "#e5e7eb"}`,
-            background: previewVisible ? "#7c3aed" : "#fff",
-            color: previewVisible ? "#fff" : "#6b7280",
-            borderRadius: 99, cursor: "pointer", transition: "all 0.18s",
-            boxShadow: previewVisible ? "0 4px 14px rgba(124,58,237,0.25)" : "0 1px 4px rgba(0,0,0,0.06)",
-          }}
-        >
-          {previewVisible ? "✕ Hide Preview" : "👁️ Live Preview"}
-        </button>
+        {/* Live preview only makes sense for tabs that change the public
+            profile page (Profile / Pricing). It's hidden on Payout because
+            payout settings aren't visible on the creator's public profile. */}
+        {tab !== "payout" && (
+          <button
+            id="btn-preview-toggle"
+            onClick={() => setPreviewVisible(v => !v)}
+            style={{
+              padding: "0.6rem 1.4rem", fontWeight: 700, fontSize: "0.85rem",
+              border: `1.5px solid ${previewVisible ? "#7c3aed" : "#e5e7eb"}`,
+              background: previewVisible ? "#7c3aed" : "#fff",
+              color: previewVisible ? "#fff" : "#6b7280",
+              borderRadius: 99, cursor: "pointer", transition: "all 0.18s",
+              boxShadow: previewVisible ? "0 4px 14px rgba(124,58,237,0.25)" : "0 1px 4px rgba(0,0,0,0.06)",
+            }}
+          >
+            {previewVisible ? "✕ Hide Preview" : "👁️ Live Preview"}
+          </button>
+        )}
       </div>
 
       <div className="settings-layout" style={{ display: "flex", gap: 32, alignItems: "flex-start" }}>

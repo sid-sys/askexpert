@@ -5,7 +5,6 @@ import { useAuth } from "@/context/AuthContext";
 import { useEffect, useRef, useState } from "react";
 import gsap from "gsap";
 import Tooltip from "./Tooltip";
-import Swal from "sweetalert2";
 
 export default function Sidebar() {
   const { user, logout, userProfile } = useAuth();
@@ -14,10 +13,10 @@ export default function Sidebar() {
   const tab = searchParams?.get("tab");
   const router = useRouter();
   const navRef = useRef<HTMLDivElement>(null);
-  const [showProfileMenu, setShowProfileMenu] = useState(false);
-  const [portalLoading, setPortalLoading] = useState(false);
+  // Profile-menu state moved to /upgrade. The avatar at the bottom of the
+  // sidebar now navigates straight there instead of popping a local menu.
 
-  const APP_ROUTES = ["/dashboard", "/profile", "/analytics", "/admin", "/upgrade"];
+  const APP_ROUTES = ["/dashboard", "/questions", "/fans", "/profile", "/analytics", "/admin", "/upgrade"];
   const showSidebar = !!user && APP_ROUTES.some(r => pathname?.startsWith(r));
   const [isNarrow, setIsNarrow] = useState(false);
   
@@ -57,57 +56,9 @@ export default function Sidebar() {
 
   if (!showSidebar || isNarrow) return null;
 
-  const handleManagePlan = async () => {
-    if (!user) return;
-    setPortalLoading(true);
-    try {
-      const { getIdToken } = await import("firebase/auth");
-      const token = await getIdToken(user as any);
-      const res   = await fetch("/api/stripe/billing-portal", {
-        method:  "POST",
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Billing portal failed");
-      if (data.url) {
-        window.open(data.url, "_blank");
-      }
-    } catch (err: any) {
-      alert(err.message || "Could not open billing portal. Try again.");
-    } finally {
-      setPortalLoading(false);
-      setShowProfileMenu(false);
-    }
-  };
-
-  const handleDeleteAccount = async () => {
-    setShowProfileMenu(false);
-    const result = await Swal.fire({
-      title: "Delete Account?",
-      html: "This will <strong>permanently delete</strong> your account, profile, and all data.<br/><br/>This <u>cannot be undone</u>.",
-      icon: "warning",
-      showCancelButton: true,
-      confirmButtonColor: "#ef4444",
-      cancelButtonColor: "#6b7280",
-      confirmButtonText: "Yes, delete my account",
-      cancelButtonText: "Cancel",
-      reverseButtons: true,
-    });
-    if (result.isConfirmed) {
-      await Swal.fire({
-        title: "Request Submitted",
-        html: "Please email <strong>support@askexpert.live</strong> to complete your account deletion. We'll process it within 24 hours.",
-        icon: "info",
-        confirmButtonColor: "var(--purple)",
-        confirmButtonText: "Got it",
-      });
-    }
-  };
-
   const handleLogout = async () => { await logout(); router.push("/"); };
   const isActive = (path: string, exact = false) => {
-    const match = exact ? pathname === path : (pathname?.startsWith(path) ?? false);
-    return match && !showProfileMenu;
+    return exact ? pathname === path : (pathname?.startsWith(path) ?? false);
   };
 
   const css = {
@@ -163,7 +114,7 @@ export default function Sidebar() {
     label: {
       fontFamily: "'Outfit',sans-serif", fontSize: "0.58rem",
       fontWeight: 800, letterSpacing: "0.18em",
-      color: "rgba(167,139,250,0.45)", textTransform: "uppercase" as const,
+      color: "#f59e0b", textTransform: "uppercase" as const,
       margin: isCollapsed ? "0 0 8px 0" : "14px 0 4px 8px", padding: 0, lineHeight: 1,
       textAlign: isCollapsed ? "center" as const : "left" as const,
       display: isCollapsed ? "none" : "block"
@@ -171,16 +122,16 @@ export default function Sidebar() {
     item: (active: boolean, isAdmin = false): React.CSSProperties => ({
       display: "flex", flexDirection: "row", alignItems: "center",
       justifyContent: isCollapsed ? "center" : "flex-start",
-      gap: 10, padding: isCollapsed ? "12px 0" : "9px 12px", borderRadius: 9,
+      gap: 10, padding: isCollapsed ? "10px 0" : "7px 12px", borderRadius: 9,
       color: active ? "#ffffff" : isAdmin ? "rgba(245,158,11,0.7)" : "rgba(161,161,170,0.8)",
       textDecoration: "none",
       fontFamily: "'Outfit',sans-serif", fontWeight: active ? 700 : 500,
-      fontSize: "0.88rem", lineHeight: 1,
-      background: active ? "#8036EB" : "transparent",
+      fontSize: "0.82rem", lineHeight: 1,
+      background: active ? "#f59e0b" : "transparent",
       border: "1px solid transparent",
       width: "100%", textAlign: "left" as const,
       whiteSpace: "nowrap" as const, overflow: "hidden",
-      marginBottom: 4, cursor: "pointer",
+      marginBottom: 2, cursor: "pointer",
       transition: "all 0.18s ease",
     }),
     collapseToggle: {
@@ -225,10 +176,10 @@ export default function Sidebar() {
     },
     avatar: {
       width: 34, height: 34, borderRadius: "50%",
-      background: "linear-gradient(135deg,#7c3aed,#a855f7)",
+      background: "linear-gradient(135deg,#f59e0b,#fbbf24)",
       color: "#fff", display: "grid", placeItems: "center",
       fontFamily: "'Outfit',sans-serif", fontSize: "0.85rem", fontWeight: 800,
-      flexShrink: 0, boxShadow: "0 2px 8px rgba(124,58,237,0.3)",
+      flexShrink: 0, boxShadow: "0 2px 8px rgba(245,158,11,0.35)",
     },
     userInfo: { display: isCollapsed ? "none" : "flex", flexDirection: "column" as const, gap: 2, minWidth: 0 },
     userName: {
@@ -274,44 +225,62 @@ export default function Sidebar() {
 
   return (
     <aside style={css.aside} className="premium-sidebar">
-      {/* Brand */}
+      {/* Brand row — logo on the left, hamburger toggle on the right */}
       <div style={css.brand}>
         {!isCollapsed ? (
-          <Link href="/" style={css.logoLink}>
-            <div style={css.logoIcon}>A</div>
-            <span style={css.logoText}>AskExpert</span>
-          </Link>
+          <>
+            <Link href="/" style={css.logoLink}>
+              <div style={css.logoIcon}>A</div>
+              <span style={css.logoText}>AskExpert</span>
+            </Link>
+            <button
+              type="button"
+              onClick={() => setIsCollapsed(true)}
+              aria-label="Collapse sidebar"
+              title="Collapse sidebar"
+              style={{
+                background: "transparent", border: "none", cursor: "pointer",
+                padding: 6, borderRadius: 8,
+                color: "rgba(255,255,255,0.6)",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                transition: "background 0.15s, color 0.15s",
+              }}
+              onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = "rgba(255,255,255,0.08)"; (e.currentTarget as HTMLButtonElement).style.color = "#fff"; }}
+              onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = "transparent"; (e.currentTarget as HTMLButtonElement).style.color = "rgba(255,255,255,0.6)"; }}
+            >
+              <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="4" y1="7" x2="20" y2="7" />
+                <line x1="4" y1="12" x2="20" y2="12" />
+                <line x1="4" y1="17" x2="20" y2="17" />
+              </svg>
+            </button>
+          </>
         ) : (
-          <Link href="/" style={css.logoLink}>
-            <div style={css.logoIcon}>A</div>
-          </Link>
+          // Collapsed: hamburger replaces the brand row entirely so it's the
+          // single tap target to re-expand. Logo becomes a small "A" below.
+          <button
+            type="button"
+            onClick={() => setIsCollapsed(false)}
+            aria-label="Expand sidebar"
+            title="Expand sidebar"
+            style={{
+              background: "transparent", border: "none", cursor: "pointer",
+              padding: 8, borderRadius: 8,
+              color: "rgba(255,255,255,0.75)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              transition: "background 0.15s, color 0.15s",
+            }}
+            onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = "rgba(255,255,255,0.08)"; (e.currentTarget as HTMLButtonElement).style.color = "#fff"; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = "transparent"; (e.currentTarget as HTMLButtonElement).style.color = "rgba(255,255,255,0.75)"; }}
+          >
+            <svg width="22" height="22" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="4" y1="7" x2="20" y2="7" />
+              <line x1="4" y1="12" x2="20" y2="12" />
+              <line x1="4" y1="17" x2="20" y2="17" />
+            </svg>
+          </button>
         )}
       </div>
-
-      <button 
-        onClick={() => setIsCollapsed(!isCollapsed)} 
-        style={css.collapseToggle}
-        onMouseEnter={e => { 
-          (e.currentTarget as HTMLButtonElement).style.transform = "translateY(-50%) scale(1.1)"; 
-          (e.currentTarget as HTMLButtonElement).style.boxShadow = "0 4px 12px rgba(0,0,0,0.15)";
-        }}
-        onMouseLeave={e => { 
-          (e.currentTarget as HTMLButtonElement).style.transform = "translateY(-50%) scale(1)"; 
-          (e.currentTarget as HTMLButtonElement).style.boxShadow = "0 2px 6px rgba(0,0,0,0.1)";
-        }}
-      >
-        {isCollapsed ? (
-          <svg width="28" height="28" fill="none" viewBox="0 0 24 24" stroke="#1f2937">
-            <circle cx="12" cy="12" r="11" strokeWidth="1.8" />
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M10 7.5l4.5 4.5-4.5 4.5" />
-          </svg>
-        ) : (
-          <svg width="28" height="28" fill="none" viewBox="0 0 24 24" stroke="#1f2937">
-            <circle cx="12" cy="12" r="11" strokeWidth="1.8" />
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M14 16.5L9.5 12l4.5-4.5" />
-          </svg>
-        )}
-      </button>
 
       <nav style={css.nav} ref={navRef}>
         {/* MAIN */}
@@ -328,6 +297,26 @@ export default function Sidebar() {
               </svg>
             </span>
             <span style={css.labelSpan}>Dashboard</span>
+          </NavItem>
+
+          <NavItem href="/questions" active={isActive("/questions")} tooltipLabel="Questions">
+            <span style={css.iconWrap}>
+              <svg width="20" height="20" fill="none" viewBox="0 0 24 24">
+                <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round"/>
+              </svg>
+            </span>
+            <span style={css.labelSpan}>Questions</span>
+          </NavItem>
+
+          <NavItem href="/fans" active={isActive("/fans")} tooltipLabel="Fans">
+            <span style={css.iconWrap}>
+              <svg width="20" height="20" fill="none" viewBox="0 0 24 24">
+                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                <circle cx="9" cy="7" r="4" stroke="currentColor" strokeWidth="2"/>
+                <path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </span>
+            <span style={css.labelSpan}>Fans</span>
           </NavItem>
 
           <NavItem href="/analytics" active={isActive("/analytics")} tooltipLabel="Analytics">
@@ -399,56 +388,14 @@ export default function Sidebar() {
         {userProfile && (
           <Link href="/upgrade" style={{
             display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-            background: "linear-gradient(135deg, #7c3aed, #a855f7)", color: "#fff",
+            background: "linear-gradient(135deg, #f59e0b, #fbbf24)", color: "#fff",
             padding: isCollapsed ? "10px" : "12px", borderRadius: 12,
             textDecoration: "none", fontWeight: 800, marginBottom: 16,
-            boxShadow: "0 4px 14px rgba(124,58,237,0.25)",
+            boxShadow: "0 4px 14px rgba(245,158,11,0.3)",
             fontSize: isCollapsed ? "1.2rem" : "0.95rem"
           }}>
             🚀 {!isCollapsed && "Upgrade Plan"}
           </Link>
-        )}
-
-        {/* POPOVER MENU */}
-        {showProfileMenu && (
-          <div style={{
-            position: "absolute", bottom: "100%", left: 20, right: 20,
-            marginBottom: 12, background: "#1f2937", borderRadius: 16,
-            padding: 12, boxShadow: "0 10px 30px rgba(0,0,0,0.5)",
-            border: "1px solid rgba(167,139,250,0.2)", zIndex: 999,
-            display: "flex", flexDirection: "column", gap: 8
-          }}>
-            <button
-              onClick={handleManagePlan}
-              disabled={portalLoading}
-              style={{
-                width: "100%", padding: "10px", background: "rgba(255,255,255,0.05)",
-                border: "none", borderRadius: 8, color: "#fff", cursor: "pointer",
-                fontWeight: 600, fontSize: "0.85rem", textAlign: "left",
-                display: "flex", alignItems: "center", gap: 8
-              }}
-              onMouseEnter={e => (e.currentTarget.style.background = "rgba(255,255,255,0.1)")}
-              onMouseLeave={e => (e.currentTarget.style.background = "rgba(255,255,255,0.05)")}
-            >
-              💳 {portalLoading ? "Opening..." : "Manage Billing & Cancel"}
-            </button>
-
-
-
-            <button
-              onClick={handleDeleteAccount}
-              style={{
-                width: "100%", padding: "10px", background: "rgba(239,68,68,0.1)",
-                border: "none", borderRadius: 8, color: "#fca5a5", cursor: "pointer",
-                fontWeight: 600, fontSize: "0.85rem", textAlign: "left",
-                display: "flex", alignItems: "center", gap: 8
-              }}
-              onMouseEnter={e => (e.currentTarget.style.background = "rgba(239,68,68,0.2)")}
-              onMouseLeave={e => (e.currentTarget.style.background = "rgba(239,68,68,0.1)")}
-            >
-              🗑️ Delete Account
-            </button>
-          </div>
         )}
 
         {/* Creator / Fan toggle */}
@@ -459,10 +406,12 @@ export default function Sidebar() {
               return (
                 <button key={label} onClick={() => router.push(href)} style={{
                   flex: 1, padding: "7px 0", borderRadius: 8, border: "none",
-                  fontFamily: "'Outfit',sans-serif", fontWeight: 700, fontSize: "0.78rem",
+                  fontFamily: "'Outfit',sans-serif", fontWeight: 800, fontSize: "0.78rem",
                   cursor: active ? "default" : "pointer",
-                  background: active ? "#8036EB" : "transparent",
-                  color: active ? "#fff" : "rgba(161,161,170,0.6)",
+                  background: active ? "#f59e0b" : "transparent",
+                  // Dark text on the amber active background — white-on-amber
+                  // had too little contrast and looked invisible.
+                  color: active ? "#1f2937" : "rgba(161,161,170,0.6)",
                   transition: "all 0.18s",
                 }}>
                   {label}
@@ -475,14 +424,14 @@ export default function Sidebar() {
         {userProfile?.username && (
           isCollapsed ? (
             <Tooltip content={`${userProfile.displayName || userProfile.username}`} placement="right">
-              <div style={{...css.user, cursor: "pointer"}} onClick={() => setShowProfileMenu(!showProfileMenu)}>
+              <div style={{...css.user, cursor: "pointer"}} onClick={() => router.push("/upgrade")}>
                 <div style={css.avatar}>
                   {(userProfile.displayName || userProfile.username)?.[0]?.toUpperCase() ?? "?"}
                 </div>
               </div>
             </Tooltip>
           ) : (
-            <div style={{...css.user, cursor: "pointer"}} onClick={() => setShowProfileMenu(!showProfileMenu)}>
+            <div style={{...css.user, cursor: "pointer"}} onClick={() => router.push("/upgrade")}>
               <div style={css.avatar}>
                 {(userProfile.displayName || userProfile.username)?.[0]?.toUpperCase() ?? "?"}
               </div>

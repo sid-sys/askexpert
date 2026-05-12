@@ -1,5 +1,6 @@
 "use client";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 
 const footerLinks = [
   { label: "About Us", href: "/about" },
@@ -8,7 +9,26 @@ const footerLinks = [
   { label: "Terms of Service", href: "/terms" },
 ];
 
+// Internal app surfaces that own their own layout/footer and shouldn't render
+// the global marketing footer. Public marketing pages (/, /about, /pricing, …)
+// continue to show it.
+const APP_ROUTES_NO_FOOTER = [
+  "/dashboard",
+  "/fan-dashboard",
+  "/fans",
+  "/questions",
+  "/analytics",
+  "/profile",
+  "/admin",
+  "/upgrade",
+  "/success",
+];
+
 export default function Footer() {
+  const pathname = usePathname();
+  if (pathname && APP_ROUTES_NO_FOOTER.some((r) => pathname === r || pathname.startsWith(r + "/"))) {
+    return null;
+  }
   const year = new Date().getFullYear();
   return (
     <footer

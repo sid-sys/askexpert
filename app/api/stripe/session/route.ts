@@ -14,6 +14,100 @@ export async function GET(req: NextRequest) {
     const session = await stripe.checkout.sessions.retrieve(sessionId);
     const meta = session.metadata ?? {};
 
+    // ── Subscription fallback ────────────────────────────────────────────────
+    // Mirror the webhook's subscription branch in case the webhook is delayed
+    // when the fan lands on /fan-dashboard. Idempotent: only writes if no doc
+    // already exists for this Stripe subscription.
+    if (session.mode === "subscription" && session.payment_status === "paid") {
+      const stripeSubscriptionId =
+        typeof session.subscription === "string" ? session.subscription : session.subscription?.id ?? null;
+      if (stripeSubscriptionId) {
+        const existing = await adminDb
+          .collection("subscriptions")
+          .where("stripeSubscriptionId", "==", stripeSubscriptionId)
+          .limit(1)
+          .get();
+        if (existing.empty) {
+          const stripeCustomerId =
+            typeof session.customer === "string" ? session.customer : session.customer?.id ?? null;
+          const creatorSnap = await adminDb.collection("users").doc(meta.creatorId).get();
+          const creatorData = creatorSnap.data() ?? {};
+          await adminDb.collection("subscriptions").add({
+            creatorId: meta.creatorId,
+            creatorName: meta.creatorName || creatorData.displayName || "Creator",
+            creatorUsername: creatorData.username || null,
+            followerId: meta.followerUid || null,
+            followerEmail: meta.followerEmail,
+            followerName: meta.followerName || null,
+            status: "active",
+            pricePerMonth: parseInt(meta.pricePaid ?? "0"),
+            currency: meta.currency ?? "usd",
+            stripeCustomerId,
+            stripeSubscriptionId,
+            stripeSessionId: session.id,
+            createdAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
+            cancelledAt: null,
+          });
+          if (meta.followerUid && stripeCustomerId) {
+            await adminDb.collection("users").doc(meta.followerUid).set(
+              { stripeCustomerId, updatedAt: FieldValue.serverTimestamp() },
+              { merge: true }
+            );
+          }
+
+          // Count the subscription payment toward creator earnings + pending payouts.
+          const grossCents = parseInt(meta.pricePaid ?? "0");
+          if (grossCents > 0) {
+            await adminDb.collection("users").doc(meta.creatorId).set(
+              {
+                totalEarnings: FieldValue.increment(grossCents),
+                updatedAt: FieldValue.serverTimestamp(),
+              },
+              { merge: true }
+            );
+            const payoutMethod = (creatorData.payoutMethod ?? "manual_bank") as string;
+            if (payoutMethod === "manual_bank") {
+              const feePercent = parseFloat(meta.feePercent ?? "15");
+              const feeCents = Math.round(grossCents * (feePercent / 100));
+              const creatorNetCents = grossCents - feeCents;
+              await adminDb.collection("pendingPayouts").add({
+                creatorId: meta.creatorId,
+                creatorName: creatorData.displayName ?? meta.creatorName ?? "",
+                creatorEmail: creatorData.email ?? "",
+                amount: creatorNetCents,
+                platformFeeAmount: feeCents,
+                totalPaid: grossCents,
+                currency: meta.currency ?? "usd",
+                paymentType: "subscription",
+                stripeSubscriptionId,
+                stripeSessionId: session.id,
+                status: "pending",
+                bankDetails: creatorData.bankDetails ?? null,
+                createdAt: FieldValue.serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp(),
+                paidAt: null,
+                notes: "",
+              });
+              await adminDb.collection("users").doc(meta.creatorId).set(
+                {
+                  pendingPayoutBalance: FieldValue.increment(creatorNetCents),
+                  updatedAt: FieldValue.serverTimestamp(),
+                },
+                { merge: true }
+              );
+            }
+          }
+        }
+      }
+
+      return NextResponse.json({
+        creatorName: meta.creatorName ?? "Your Expert",
+        followerEmail: meta.followerEmail ?? "",
+        mode: "subscription",
+      });
+    }
+
     // ── FALLBACK SYNC ────────────────────────────────────────────────────────
     // If the session is paid but the question doesn't exist in Firestore,
     // we create it now. This handles cases where webhooks are delayed or fail.
@@ -125,6 +219,7 @@ export async function GET(req: NextRequest) {
               creatorName: creatorData.displayName || meta.creatorName || "Creator",
               question: meta.content || "",
               askerEmail: meta.followerEmail,
+              askerName: meta.followerName,
               price: parseInt(meta.pricePaid ?? "0"),
               category: meta.category,
               requestedReplyFormat: meta.requestedReplyFormat,
@@ -137,9 +232,9 @@ export async function GET(req: NextRequest) {
           // 3. Push notification to creator
           await sendPushNotification({
             uid:   meta.creatorId,
-            title: "💰 New Question Paid!",
-            body:  `Someone paid to ask: "${(meta.content ?? "").slice(0, 80)}..."`,
-            link:  "/dashboard",
+            title: `💰 New question from ${meta.followerName?.trim() || "a fan"}`,
+            body:  `"${(meta.content ?? "").slice(0, 80)}..."`,
+            link:  "/questions",
           });
 
           // Mark as sent so we don't repeat on refresh

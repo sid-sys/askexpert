@@ -2,10 +2,12 @@
 
 import { useEffect, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { collection, query, where, getDocs } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { COLLECTIONS } from "@/lib/types";
+import Swal from "sweetalert2";
+import ChatThread, { useChatUnread, useChatPreview } from "@/components/ChatThread";
 
 type Subscription = {
   id: string;
@@ -44,20 +46,95 @@ const NAV: { id: NavId; label: string; icon: React.ReactElement }[] = [
     id: "questions", label: "My Questions",
     icon: <svg width="18" height="18" fill="none" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round"/></svg>,
   },
-  {
-    id: "settings", label: "Settings",
-    icon: <svg width="18" height="18" fill="none" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="2"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" stroke="currentColor" strokeWidth="2"/></svg>,
-  },
 ];
 
 export default function FanDashboardPage() {
   const { user, userProfile, logout } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [activeNav, setActiveNav] = useState<NavId>("home");
   const [creatorUrl, setCreatorUrl] = useState("");
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [questions, setQuestions] = useState<Question[]>([]);
   const [loading, setLoading] = useState(true);
+  const [portalLoading, setPortalLoading] = useState(false);
+  // Two-pane "My Questions" chat tab — which subscription is the active thread?
+  const [selectedChatSub, setSelectedChatSub] = useState<string | null>(null);
+  // Mobile single-pane switching for the chat tab. Matches the same 800px
+  // breakpoint the rest of the fan-dashboard mobile chrome uses (hamburger,
+  // .fan-bnav), so the chat goes mobile at the same width as everything else.
+  const [isChatMobile, setIsChatMobile] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 800px)");
+    const update = () => setIsChatMobile(mq.matches);
+    update();
+    mq.addEventListener?.("change", update);
+    return () => mq.removeEventListener?.("change", update);
+  }, []);
+
+  // Lock body scroll while the mobile chat overlay is open so the page
+  // behind it can't move.
+  const fanChatOverlayActive = isChatMobile && activeNav === "questions" && selectedChatSub !== null;
+  useEffect(() => {
+    if (!fanChatOverlayActive) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = prev; };
+  }, [fanChatOverlayActive]);
+
+  const handleManageSubscription = async () => {
+    if (!user) return;
+    setPortalLoading(true);
+    try {
+      const { getIdToken } = await import("firebase/auth");
+      const token = await getIdToken(user as any);
+      const res = await fetch("/api/stripe/billing-portal", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ returnUrl: "/fan-dashboard" }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Could not open billing portal");
+      if (data.url) window.location.href = data.url;
+    } catch (err: any) {
+      Swal.fire({
+        title: "Couldn't open billing portal",
+        text: err.message || "Try again in a moment.",
+        icon: "error",
+        confirmButtonColor: "var(--purple)",
+      });
+    } finally {
+      setPortalLoading(false);
+    }
+  };
+
+  // ── Post-subscribe landing: confirm + nudge webhook fallback ────────────
+  useEffect(() => {
+    const subscribed = searchParams?.get("subscribed");
+    const sessionId = searchParams?.get("session_id");
+    if (subscribed !== "1") return;
+
+    // Best-effort: hit /api/stripe/session so the server-side fallback can
+    // create the subscription doc if the webhook hasn't fired yet. We ignore
+    // the response either way.
+    if (sessionId) {
+      fetch(`/api/stripe/session?session_id=${encodeURIComponent(sessionId)}`).catch(() => {});
+    }
+
+    Swal.fire({
+      title: "You're subscribed! 🎉",
+      text: "Your monthly subscription is active. Ask the creator anything from their profile.",
+      icon: "success",
+      confirmButtonColor: "var(--purple)",
+      confirmButtonText: "Got it",
+    });
+
+    // Strip the query params so a refresh doesn't re-fire the toast.
+    router.replace("/fan-dashboard");
+  }, [searchParams, router]);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [activeQFilter, setActiveQFilter] = useState<"ALL" | "PENDING" | "ANSWERED">("ALL");
 
@@ -132,7 +209,7 @@ export default function FanDashboardPage() {
           <button key={item.id} onClick={() => go(item.id)} style={{
             display: "flex", alignItems: "center", gap: 10,
             padding: "9px 12px", borderRadius: 9, border: "none", width: "100%", textAlign: "left",
-            background: active ? "#8036EB" : "transparent",
+            background: active ? "#f59e0b" : "transparent",
             color: active ? "#fff" : "rgba(161,161,170,0.8)",
             fontFamily: "'Outfit',sans-serif", fontWeight: active ? 700 : 500, fontSize: "0.88rem",
             cursor: "pointer", transition: "all 0.18s", marginBottom: 2,
@@ -155,10 +232,10 @@ export default function FanDashboardPage() {
           return (
             <button key={label} onClick={() => router.push(href)} style={{
               flex: 1, padding: "7px 0", borderRadius: 8, border: "none",
-              fontFamily: "'Outfit',sans-serif", fontWeight: 700, fontSize: "0.78rem",
+              fontFamily: "'Outfit',sans-serif", fontWeight: 800, fontSize: "0.78rem",
               cursor: active ? "default" : "pointer",
-              background: active ? "#8036EB" : "transparent",
-              color: active ? "#fff" : "rgba(161,161,170,0.6)",
+              background: active ? "#f59e0b" : "transparent",
+              color: active ? "#1f2937" : "rgba(161,161,170,0.6)",
               transition: "all 0.18s",
             }}>
               {label}
@@ -166,15 +243,28 @@ export default function FanDashboardPage() {
           );
         })}
       </div>
-      <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 10px", borderRadius: 10, background: "rgba(167,139,250,0.05)", border: "1px solid rgba(167,139,250,0.08)" }}>
+      <button
+        type="button"
+        onClick={() => go("settings")}
+        title="Open settings"
+        style={{
+          display: "flex", alignItems: "center", gap: 10,
+          padding: "8px 10px", borderRadius: 10,
+          background: activeNav === "settings" ? "rgba(167,139,250,0.14)" : "rgba(167,139,250,0.05)",
+          border: "1px solid rgba(167,139,250,0.08)",
+          textAlign: "left", cursor: "pointer", width: "100%",
+        }}
+        onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = "rgba(167,139,250,0.14)"; }}
+        onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = activeNav === "settings" ? "rgba(167,139,250,0.14)" : "rgba(167,139,250,0.05)"; }}
+      >
         <div style={{ width: 34, height: 34, borderRadius: "50%", background: "linear-gradient(135deg,#7c3aed,#a855f7)", color: "#fff", display: "grid", placeItems: "center", fontFamily: "'Outfit',sans-serif", fontSize: "0.85rem", fontWeight: 800, flexShrink: 0 }}>
           {initial}
         </div>
-        <div style={{ minWidth: 0 }}>
+        <div style={{ minWidth: 0, flex: 1 }}>
           <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: "0.8rem", fontWeight: 700, color: "#e4e4e7", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 130 }}>{displayName}</div>
           {username && <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: "0.65rem", color: "rgba(167,139,250,0.55)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 130 }}>@{username}</div>}
         </div>
-      </div>
+      </button>
       <button onClick={handleLogout} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", borderRadius: 9, border: "1px solid rgba(255,255,255,0.05)", background: "transparent", color: "rgba(161,161,170,0.55)", fontFamily: "'Outfit',sans-serif", fontSize: "0.82rem", fontWeight: 500, cursor: "pointer", width: "100%", textAlign: "left", transition: "all 0.18s" }}
         onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = "rgba(239,68,68,0.08)"; (e.currentTarget as HTMLButtonElement).style.color = "#fca5a5"; }}
         onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = "transparent"; (e.currentTarget as HTMLButtonElement).style.color = "rgba(161,161,170,0.55)"; }}
@@ -265,9 +355,10 @@ export default function FanDashboardPage() {
           .fan-bnav { display: block; position: fixed; bottom: 0; left: 0; right: 0; background: #fff; border-top: 1px solid #f0f0f0; z-index: 300; padding: 8px 0 env(safe-area-inset-bottom,8px); }
           .fan-bnav-inner { display: flex; justify-content: space-around; }
           .fan-bnav-btn { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 4px 8px; border: none; background: none; cursor: pointer; color: #9ca3af; font-family: 'Outfit',sans-serif; font-size: 0.62rem; font-weight: 600; min-width: 52px; }
-          .fan-bnav-btn.active { color: #7c3aed; }
+          .fan-bnav-btn.active { color: #f59e0b; }
         }
         @media (max-width: 420px) { .fan-stat-grid { grid-template-columns: 1fr; } }
+        @media (max-width: 800px) { .fan-chat-grid { grid-template-columns: 1fr !important; } }
         .fan-input { width: 100%; padding: 12px 16px; border: 1.5px solid #e5e7eb; border-radius: 12px; font-size: 0.9rem; font-family: 'Outfit',sans-serif; outline: none; }
         .fan-input:focus { border-color: #a855f7; box-shadow: 0 0 0 3px rgba(168,85,247,0.1); }
       `}</style>
@@ -317,42 +408,75 @@ export default function FanDashboardPage() {
               <>
                 <div style={{ marginBottom: 24 }}>
                   <h1 style={{ fontFamily: "'Outfit',sans-serif", fontWeight: 800, fontSize: "clamp(1.5rem,3vw,2rem)", color: "#111", margin: "0 0 4px" }}>Welcome back, {displayName.split(" ")[0]} 👋</h1>
-                  <p style={{ fontFamily: "'Outfit',sans-serif", color: "#888", fontSize: "0.9rem", margin: 0 }}>Here&apos;s what&apos;s happening with your subscriptions.</p>
+                  <p style={{ fontFamily: "'Outfit',sans-serif", color: "#888", fontSize: "0.9rem", margin: 0 }}>
+                    Chat with the creators you subscribe to or send one-time questions from any creator&apos;s public profile.
+                  </p>
                 </div>
 
                 {/* Stat row */}
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: 12, marginBottom: 24 }}>
-                  {statCard("Subscriptions", subscriptions.length, "⭐", "#f5f3ff", "#7c3aed")}
-                  {statCard("Questions Asked", questions.length, "💬", "#f0fdf4", "#059669")}
+                  {statCard("Active Chats", subscriptions.length, "💬", "#f5f3ff", "#7c3aed")}
+                  {statCard("One-Time Questions", questions.length, "❓", "#fffbeb", "#d97706")}
                   {statCard("Answered", answeredCount, "✅", "#ecfdf5", "#059669")}
-                  {statCard("Pending", pendingCount, "⏳", "#fffbeb", "#d97706")}
+                  {statCard("Pending", pendingCount, "⏳", "#f0f9ff", "#0369a1")}
+                </div>
+
+                {/* How-it-works tip — explains chat vs one-time */}
+                <div style={{
+                  background: "linear-gradient(135deg, #f5f3ff 0%, #fff 100%)",
+                  border: "1px solid #ede9fe", borderRadius: 16, padding: "14px 18px",
+                  marginBottom: 24, display: "flex", gap: 14, alignItems: "flex-start",
+                }}>
+                  <span style={{ fontSize: "1.3rem", flexShrink: 0 }}>💡</span>
+                  <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: "0.85rem", color: "#4b5563", lineHeight: 1.55 }}>
+                    <strong style={{ color: "#1f2937" }}>Two ways to reach a creator:</strong>
+                    {" "}<span style={{ color: "#7c3aed", fontWeight: 700 }}>Subscribe</span> to chat directly (unlimited messages, files, voice notes), or
+                    {" "}<span style={{ color: "#d97706", fontWeight: 700 }}>pay once</span> to send a single question from their public profile.
+                  </div>
                 </div>
 
                 {/* Two-column body */}
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, alignItems: "start" }}>
-                  {/* Left – Your Creators */}
+                  {/* Left – Your Conversations (chat-first) */}
                   {card(<>
-                    {sectionTitle("Your Creators")}
+                    {sectionTitle("Your Conversations")}
                     {loading
                       ? <div style={{ textAlign: "center", padding: 40, color: "#9ca3af", fontFamily: "'Outfit',sans-serif" }}>Loading…</div>
                       : subscriptions.length === 0
-                        ? emptyState("⭐", "No subscriptions yet.", { label: "Find Creators →", nav: "discover" })
-                        : <div style={{ marginTop: -8 }}>{subscriptions.slice(0, 6).map(creatorRow)}<div style={{ height: 1 }} /></div>
+                        ? emptyState("💬", "Subscribe to a creator to start chatting.", { label: "Find Creators →", nav: "discover" })
+                        : <div style={{ marginTop: -8 }}>
+                            {subscriptions.slice(0, 6).map((sub) => (
+                              <HomeChatRow
+                                key={sub.id}
+                                sub={sub}
+                                onOpenChat={() => { setSelectedChatSub(sub.id); go("questions"); }}
+                              />
+                            ))}
+                          </div>
                     }
                     {subscriptions.length > 0 && (
                       <button onClick={() => go("subscriptions")} style={{ background: "none", border: "none", color: "#7c3aed", fontWeight: 700, fontSize: "0.82rem", cursor: "pointer", paddingTop: 12, fontFamily: "'Outfit',sans-serif" }}>
-                        View all {subscriptions.length} →
+                        Manage subscriptions →
                       </button>
                     )}
                   </>, { marginBottom: 0 })}
 
-                  {/* Right – Recent Questions */}
+                  {/* Right – One-Time Questions */}
                   {card(<>
-                    {sectionTitle("Recent Questions")}
+                    {sectionTitle("One-Time Questions")}
                     {loading
                       ? <div style={{ textAlign: "center", padding: 40, color: "#9ca3af", fontFamily: "'Outfit',sans-serif" }}>Loading…</div>
                       : questions.length === 0
-                        ? emptyState("💬", "No questions yet.", { label: "View Subscriptions →", nav: "subscriptions" })
+                        ? <div style={{ textAlign: "center", padding: "20px 0", color: "#9ca3af" }}>
+                            <div style={{ fontSize: "2.2rem", marginBottom: 10 }}>❓</div>
+                            <p style={{ fontFamily: "'Outfit',sans-serif", color: "#1f2937", fontWeight: 700, margin: "0 0 4px", fontSize: "0.95rem" }}>No one-time questions yet</p>
+                            <p style={{ fontFamily: "'Outfit',sans-serif", color: "#9ca3af", margin: "0 0 14px", fontSize: "0.82rem", lineHeight: 1.5 }}>
+                              Pay once to ask any creator a single question — answered within their SLA.
+                            </p>
+                            <button onClick={() => go("discover")} style={{ background: "linear-gradient(135deg,#d97706,#f59e0b)", border: "none", color: "#fff", fontWeight: 700, cursor: "pointer", fontSize: "0.85rem", padding: "8px 20px", borderRadius: 99, fontFamily: "'Outfit',sans-serif" }}>
+                              Find a Creator →
+                            </button>
+                          </div>
                         : <>
                             {questions.slice(0, 5).map((q) => (
                               <div key={q.id} style={{ padding: "12px 0", borderBottom: "1px solid #f3f4f6" }}>
@@ -369,11 +493,6 @@ export default function FanDashboardPage() {
                                 )}
                               </div>
                             ))}
-                            {questions.length > 5 && (
-                              <button onClick={() => go("questions")} style={{ background: "none", border: "none", color: "#7c3aed", fontWeight: 700, fontSize: "0.82rem", cursor: "pointer", paddingTop: 12, fontFamily: "'Outfit',sans-serif" }}>
-                                View all {questions.length} →
-                              </button>
-                            )}
                           </>
                     }
                   </>, { marginBottom: 0 })}
@@ -417,93 +536,103 @@ export default function FanDashboardPage() {
                   <div style={{ textAlign: "center", padding: 60, color: "#9ca3af", fontFamily: "'Outfit',sans-serif" }}>Loading…</div>
                 ) : subscriptions.length === 0 ? card(emptyState("⭐", "No active subscriptions yet.", { label: "Find Creators →", nav: "discover" }))
                   : subscriptions.map((sub) => (
-                    <div key={sub.id} style={{ background: "#fff", border: "1px solid #f0f0f0", borderRadius: 16, padding: "20px 22px", marginBottom: 12, boxShadow: "0 1px 4px rgba(0,0,0,0.04)", transition: "box-shadow 0.2s, transform 0.2s" }}
-                      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.boxShadow = "0 4px 16px rgba(124,58,237,0.1)"; (e.currentTarget as HTMLElement).style.transform = "translateY(-2px)"; }}
-                      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.boxShadow = "0 1px 4px rgba(0,0,0,0.04)"; (e.currentTarget as HTMLElement).style.transform = ""; }}
-                    >
-                      <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-                        <div style={{ width: 46, height: 46, borderRadius: "50%", background: "linear-gradient(135deg,#7c3aed,#a855f7)", display: "grid", placeItems: "center", color: "#fff", fontFamily: "'Outfit',sans-serif", fontWeight: 800, fontSize: "0.95rem", flexShrink: 0 }}>
-                          {(sub.creatorName || sub.creatorUsername || "?")[0].toUpperCase()}
-                        </div>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <p style={{ fontFamily: "'Outfit',sans-serif", fontWeight: 700, color: "#1f2937", fontSize: "0.95rem", marginBottom: 2 }}>{sub.creatorName || sub.creatorUsername || sub.creatorId}</p>
-                          {sub.creatorUsername && <p style={{ fontFamily: "'Outfit',sans-serif", color: "#9ca3af", fontSize: "0.78rem", marginBottom: 8 }}>@{sub.creatorUsername}</p>}
-                          <span style={{ background: "#dcfce7", color: "#166534", borderRadius: 99, padding: "2px 10px", fontSize: "0.68rem", fontWeight: 800, fontFamily: "'Outfit',sans-serif" }}>✓ Active</span>
-                        </div>
-                        {sub.creatorUsername && (
-                          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                            <a href={`/${sub.creatorUsername}`} style={{ display: "block", background: "linear-gradient(135deg,#7c3aed,#a855f7)", color: "#fff", padding: "8px 16px", borderRadius: 10, fontWeight: 700, fontSize: "0.8rem", textDecoration: "none", fontFamily: "'Outfit',sans-serif", textAlign: "center", whiteSpace: "nowrap" }}>Ask a Question →</a>
-                            <a href={`/${sub.creatorUsername}`} style={{ display: "block", color: "#7c3aed", padding: "7px 16px", borderRadius: 10, fontWeight: 700, fontSize: "0.78rem", textDecoration: "none", fontFamily: "'Outfit',sans-serif", textAlign: "center", border: "1.5px solid #ede9fe", whiteSpace: "nowrap" }}>View Page</a>
-                          </div>
-                        )}
-                      </div>
-                    </div>
+                    <FanSubscriptionRow
+                      key={sub.id}
+                      sub={sub}
+                      onOpenChat={() => { setSelectedChatSub(sub.id); go("questions"); }}
+                      onManage={handleManageSubscription}
+                      portalLoading={portalLoading}
+                    />
                   ))
                 }
               </>
             )}
 
-            {/* QUESTIONS */}
-            {activeNav === "questions" && (
-              <>
-                <div style={{ marginBottom: 24 }}>
-                  <h1 style={{ fontFamily: "'Outfit',sans-serif", fontWeight: 800, fontSize: "clamp(1.5rem,3vw,2rem)", color: "#111", margin: "0 0 4px" }}>My Questions</h1>
-                  <p style={{ fontFamily: "'Outfit',sans-serif", color: "#888", fontSize: "0.9rem", margin: 0 }}>{loading ? "…" : `${answeredCount} answered · ${pendingCount} pending`}</p>
-                </div>
-
-                {/* Filter pills */}
-                <div style={{ background: "#fff", border: "1px solid #f0f0f0", borderRadius: 16, padding: "16px 20px", marginBottom: 20, boxShadow: "0 1px 4px rgba(0,0,0,0.04)", display: "flex", gap: 6, flexWrap: "wrap" as const, alignItems: "center" }}>
-                  {(["ALL", "PENDING", "ANSWERED"] as const).map((s) => {
-                    const active = (activeQFilter ?? "ALL") === s;
-                    const labels: Record<string, string> = { ALL: "All", PENDING: "⏳ Pending", ANSWERED: "✅ Answered" };
-                    return (
-                      <button key={s} onClick={() => setActiveQFilter(s)} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "0.45rem 1.1rem", fontFamily: "'Outfit',sans-serif", fontSize: "0.84rem", fontWeight: 600, borderRadius: 99, border: "none", cursor: "pointer", transition: "all 0.18s", background: active ? "#7c3aed" : "#f3f4f6", color: active ? "#fff" : "#6b7280", whiteSpace: "nowrap" as const }}>
-                        {labels[s]}
-                        {s === "PENDING" && pendingCount > 0 && <span style={{ background: active ? "rgba(255,255,255,0.25)" : "#ede9fe", color: active ? "#fff" : "#7c3aed", borderRadius: 99, padding: "1px 7px", fontSize: "0.72rem", fontWeight: 800 }}>{pendingCount}</span>}
-                      </button>
-                    );
-                  })}
-                  <span style={{ marginLeft: "auto", fontFamily: "'Outfit',sans-serif", color: "#9ca3af", fontSize: "0.82rem" }}>
-                    {questions.filter(q => (activeQFilter ?? "ALL") === "ALL" || q.status === activeQFilter).length} result{questions.filter(q => (activeQFilter ?? "ALL") === "ALL" || q.status === activeQFilter).length !== 1 ? "s" : ""}
-                  </span>
-                </div>
-
-                {loading ? (
-                  <div style={{ textAlign: "center", padding: 60, color: "#9ca3af", fontFamily: "'Outfit',sans-serif" }}>Loading…</div>
-                ) : (() => {
-                  const filtered = questions.filter(q => (activeQFilter ?? "ALL") === "ALL" || q.status === activeQFilter);
-                  return filtered.length === 0 ? card(
-                    <div style={{ textAlign: "center", padding: "32px 0" }}>
-                      <p style={{ fontSize: "2rem", marginBottom: 10 }}>📭</p>
-                      <p style={{ fontFamily: "'Outfit',sans-serif", color: "#999", margin: "0 0 14px", fontSize: "0.92rem" }}>No questions match these filters.</p>
-                      <button onClick={() => setActiveQFilter("ALL")} style={{ background: "#7c3aed", border: "none", color: "#fff", fontWeight: 700, cursor: "pointer", fontSize: "0.85rem", padding: "8px 20px", borderRadius: 99, fontFamily: "'Outfit',sans-serif" }}>Clear filters</button>
+            {/* QUESTIONS — two-pane chat: subscribed creators | thread */}
+            {activeNav === "questions" && (() => {
+              const activeSubs = subscriptions.filter((s) => s.status === "active");
+              // On desktop we auto-pick the first creator so something is always
+              // visible. On mobile we start with no selection so the user sees
+              // the chat list first and only navigates into a thread on tap.
+              const fallback = isChatMobile ? null : (activeSubs[0]?.id ?? null);
+              const currentId = selectedChatSub && activeSubs.some(s => s.id === selectedChatSub) ? selectedChatSub : fallback;
+              const current = activeSubs.find(s => s.id === currentId) ?? null;
+              const mobileInChat = isChatMobile && current !== null;
+              const showList = !isChatMobile || !mobileInChat;
+              const showThread = !isChatMobile || mobileInChat;
+              return (
+                <>
+                  {!mobileInChat && (
+                    <div style={{ marginBottom: 16 }}>
+                      <h1 style={{ fontFamily: "'Outfit',sans-serif", fontWeight: 800, fontSize: "clamp(1.5rem,3vw,2rem)", color: "#111", margin: "0 0 4px" }}>My Questions</h1>
+                      <p style={{ fontFamily: "'Outfit',sans-serif", color: "#888", fontSize: "0.9rem", margin: 0 }}>
+                        Chat directly with the creators you subscribe to.
+                      </p>
                     </div>
-                  ) : <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                    {filtered.map((q) => (
-                      <div key={q.id} style={{ background: "#fff", border: "1px solid #f0f0f0", borderRadius: 16, padding: "20px 22px", boxShadow: "0 1px 4px rgba(0,0,0,0.04)", transition: "box-shadow 0.2s, transform 0.2s" }}
-                        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.boxShadow = "0 4px 16px rgba(124,58,237,0.1)"; (e.currentTarget as HTMLElement).style.transform = "translateY(-2px)"; }}
-                        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.boxShadow = "0 1px 4px rgba(0,0,0,0.04)"; (e.currentTarget as HTMLElement).style.transform = ""; }}
-                      >
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, marginBottom: 10 }}>
-                          <div style={{ flex: 1 }}>
-                            <p style={{ fontFamily: "'Outfit',sans-serif", fontWeight: 600, color: "#1f2937", fontSize: "0.92rem", lineHeight: 1.6, marginBottom: 4 }}>{q.content}</p>
-                            {q.creatorUsername && <p style={{ fontFamily: "'Outfit',sans-serif", fontSize: "0.74rem", color: "#9ca3af", margin: 0 }}>To <a href={`/${q.creatorUsername}`} style={{ color: "#7c3aed", fontWeight: 600 }}>@{q.creatorUsername}</a></p>}
-                          </div>
-                          {statusBadge(q.status)}
-                        </div>
-                        {q.response && (
-                          <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 12, padding: "12px 16px", marginBottom: 10 }}>
-                            <p style={{ fontFamily: "'Outfit',sans-serif", fontSize: "0.68rem", fontWeight: 800, color: "#166534", textTransform: "uppercase" as const, letterSpacing: "0.08em", marginBottom: 6 }}>Creator&apos;s Answer</p>
-                            <p style={{ fontFamily: "'Outfit',sans-serif", fontSize: "0.88rem", color: "#166534", lineHeight: 1.65, margin: 0 }}>{q.response}</p>
-                          </div>
-                        )}
-                        <p style={{ fontFamily: "'Outfit',sans-serif", color: "#bbb", fontSize: "0.72rem", margin: 0 }}>{q.createdAt.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}</p>
+                  )}
+
+                  {loading ? (
+                    <div style={{ textAlign: "center", padding: 60, color: "#9ca3af", fontFamily: "'Outfit',sans-serif" }}>Loading…</div>
+                  ) : activeSubs.length === 0 ? (
+                    card(
+                      <div style={{ textAlign: "center", padding: "32px 0" }}>
+                        <p style={{ fontSize: "2.4rem", marginBottom: 10 }}>💬</p>
+                        <p style={{ fontFamily: "'Outfit',sans-serif", color: "#1f2937", fontWeight: 700, margin: "0 0 6px", fontSize: "1rem" }}>No conversations yet</p>
+                        <p style={{ fontFamily: "'Outfit',sans-serif", color: "#888", margin: "0 0 14px", fontSize: "0.88rem" }}>Subscribe to a creator and you can chat with them here.</p>
+                        <button onClick={() => go("discover")} style={{ background: "#7c3aed", border: "none", color: "#fff", fontWeight: 700, cursor: "pointer", fontSize: "0.85rem", padding: "8px 20px", borderRadius: 99, fontFamily: "'Outfit',sans-serif" }}>Find Creators →</button>
                       </div>
-                    ))}
-                  </div>;
-                })()}
-              </>
-            )}
+                    )
+                  ) : (
+                    <div className="fan-chat-grid" style={{ display: "grid", gridTemplateColumns: isChatMobile ? "1fr" : "minmax(260px, 320px) 1fr", gap: 14, alignItems: "stretch" }}>
+                      {showList && (
+                        <aside style={{ background: "#fff", border: "1px solid #f0f0f0", borderRadius: 16, padding: 8, boxShadow: "0 1px 4px rgba(0,0,0,0.04)", display: "flex", flexDirection: "column", maxHeight: isChatMobile ? "calc(100vh - 200px)" : 640 }}>
+                          <div style={{ overflowY: "auto", flex: 1 }}>
+                            {activeSubs.map((s) => (
+                              <FanChatCreatorRow
+                                key={s.id}
+                                sub={s}
+                                active={!isChatMobile && (currentId ?? null) === s.id}
+                                onClick={() => setSelectedChatSub(s.id)}
+                              />
+                            ))}
+                          </div>
+                        </aside>
+                      )}
+
+                      {showThread && (
+                        <section style={mobileInChat ? {
+                          // Full-viewport overlay: covers the page and the
+                          // bottom-nav (zIndex above .fan-bnav's 300). The
+                          // only way out is the back arrow in the chat header.
+                          position: "fixed",
+                          top: 0, left: 0, right: 0, bottom: 0,
+                          background: "#f7f7f8",
+                          zIndex: 9999,
+                        } : { minHeight: 480 }}>
+                          {current && user ? (
+                            <ChatThread
+                              subscriptionId={current.id}
+                              creatorId={current.creatorId}
+                              followerId={user.uid}
+                              viewerRole="fan"
+                              counterpartName={current.creatorName || current.creatorUsername || "Creator"}
+                              counterpartSubtitle={current.creatorUsername ? `@${current.creatorUsername}` : undefined}
+                              counterpartInitial={(current.creatorName || current.creatorUsername || "?")[0]}
+                              height={mobileInChat ? "100%" : 560}
+                              onBack={isChatMobile ? () => setSelectedChatSub(null) : undefined}
+                            />
+                          ) : (
+                            <div style={{ background: "#fff", border: "1px solid #f0f0f0", borderRadius: 16, padding: 40, textAlign: "center", color: "#9ca3af" }}>
+                              Pick a creator to start chatting.
+                            </div>
+                          )}
+                        </section>
+                      )}
+                    </div>
+                  )}
+                </>
+              );
+            })()}
 
             {/* SETTINGS */}
             {activeNav === "settings" && (
@@ -564,5 +693,156 @@ export default function FanDashboardPage() {
 
       </div>
     </>
+  );
+}
+
+function HomeChatRow({
+  sub, onOpenChat,
+}: {
+  sub: Subscription;
+  onOpenChat: () => void;
+}) {
+  const unread = useChatUnread(sub.id, "fan");
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 0", borderBottom: "1px solid #f3f4f6" }}>
+      <div style={{ position: "relative", flexShrink: 0 }}>
+        <div style={{ width: 38, height: 38, borderRadius: "50%", background: "linear-gradient(135deg,#7c3aed,#a855f7)", display: "grid", placeItems: "center", color: "#fff", fontFamily: "'Outfit',sans-serif", fontWeight: 800, fontSize: "0.85rem" }}>
+          {(sub.creatorName || sub.creatorUsername || "?")[0].toUpperCase()}
+        </div>
+        {unread > 0 && (
+          <span style={{ position: "absolute", top: -2, right: -2, minWidth: 18, height: 18, padding: "0 5px", borderRadius: 99, background: "#ef4444", color: "#fff", fontSize: "0.66rem", fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 0 0 2px #fff" }}>
+            {unread > 9 ? "9+" : unread}
+          </span>
+        )}
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <p style={{ fontFamily: "'Outfit',sans-serif", fontWeight: unread > 0 ? 800 : 700, color: "#1f2937", fontSize: "0.9rem", margin: "0 0 2px" }}>{sub.creatorName || sub.creatorUsername || sub.creatorId}</p>
+        {sub.creatorUsername && <p style={{ fontFamily: "'Outfit',sans-serif", color: unread > 0 ? "#ef4444" : "#9ca3af", fontSize: "0.75rem", margin: 0, fontWeight: unread > 0 ? 700 : 400 }}>{unread > 0 ? `${unread} new message${unread > 1 ? "s" : ""}` : `@${sub.creatorUsername}`}</p>}
+      </div>
+      <button
+        onClick={onOpenChat}
+        style={{ background: "linear-gradient(135deg,#7c3aed,#a855f7)", color: "#fff", fontWeight: 700, fontSize: "0.8rem", padding: "7px 14px", border: "none", borderRadius: 10, fontFamily: "'Outfit',sans-serif", cursor: "pointer", whiteSpace: "nowrap" }}
+      >
+        💬 Open Chat
+      </button>
+    </div>
+  );
+}
+
+function chatTimeAgoShort(d: Date | null): string {
+  if (!d) return "";
+  const diff = Date.now() - d.getTime();
+  const mins = Math.floor(diff / 60_000);
+  if (mins < 1) return "now";
+  if (mins < 60) return `${mins}m`;
+  const hrs = Math.floor(diff / 3_600_000);
+  if (hrs < 24) return `${hrs}h`;
+  const days = Math.floor(diff / 86_400_000);
+  if (days < 7) return `${days}d`;
+  return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
+function FanChatCreatorRow({
+  sub, active, onClick,
+}: {
+  sub: Subscription;
+  active: boolean;
+  onClick: () => void;
+}) {
+  const { unread, lastSnippet, lastAt, lastFromMe } = useChatPreview(sub.id, "fan");
+  const name = sub.creatorName || sub.creatorUsername || "Creator";
+  const hasUnread = unread > 0 && !active;
+  const previewText = lastSnippet
+    ? `${lastFromMe ? "You: " : ""}${lastSnippet}`
+    : (sub.creatorUsername ? `@${sub.creatorUsername}` : "Start a conversation");
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        display: "flex", alignItems: "center", gap: 12,
+        width: "100%", padding: "12px 14px", border: "none",
+        background: active ? "#f5f3ff" : "transparent",
+        borderRadius: 12, cursor: "pointer", textAlign: "left",
+        marginBottom: 2,
+      }}
+      onMouseEnter={e => { if (!active) (e.currentTarget as HTMLElement).style.background = "#fafafa"; }}
+      onMouseLeave={e => { if (!active) (e.currentTarget as HTMLElement).style.background = "transparent"; }}
+    >
+      <div style={{ flexShrink: 0 }}>
+        <div style={{ width: 44, height: 44, borderRadius: "50%", background: "linear-gradient(135deg,#7c3aed,#a855f7)", color: "#fff", display: "grid", placeItems: "center", fontFamily: "'Outfit',sans-serif", fontWeight: 800, fontSize: "1rem" }}>
+          {name[0].toUpperCase()}
+        </div>
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8 }}>
+          <span style={{ fontFamily: "'Outfit',sans-serif", fontWeight: hasUnread ? 800 : 700, color: "#1f2937", fontSize: "0.92rem", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: 0, flex: 1 }}>{name}</span>
+          {lastAt && (
+            <span style={{ fontFamily: "'Outfit',sans-serif", color: hasUnread ? "#ef4444" : "#9ca3af", fontSize: "0.7rem", fontWeight: hasUnread ? 700 : 500, flexShrink: 0 }}>
+              {chatTimeAgoShort(lastAt)}
+            </span>
+          )}
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4 }}>
+          <span style={{ fontFamily: "'Outfit',sans-serif", color: hasUnread ? "#1f2937" : "#6b7280", fontSize: "0.78rem", fontWeight: hasUnread ? 600 : 400, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", flex: 1, minWidth: 0 }}>
+            {previewText}
+          </span>
+          {hasUnread && (
+            <span style={{ minWidth: 18, height: 18, padding: "0 6px", borderRadius: 99, background: "#ef4444", color: "#fff", fontSize: "0.66rem", fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+              {unread > 9 ? "9+" : unread}
+            </span>
+          )}
+        </div>
+      </div>
+    </button>
+  );
+}
+
+function FanSubscriptionRow({
+  sub, onOpenChat, onManage, portalLoading,
+}: {
+  sub: Subscription;
+  onOpenChat: () => void;
+  onManage: () => void;
+  portalLoading: boolean;
+}) {
+  const unread = useChatUnread(sub.id, "fan");
+  return (
+    <div style={{ background: "#fff", border: "1px solid #f0f0f0", borderRadius: 16, padding: "20px 22px", marginBottom: 12, boxShadow: "0 1px 4px rgba(0,0,0,0.04)" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+        <div style={{ width: 46, height: 46, borderRadius: "50%", background: "linear-gradient(135deg,#7c3aed,#a855f7)", display: "grid", placeItems: "center", color: "#fff", fontFamily: "'Outfit',sans-serif", fontWeight: 800, fontSize: "0.95rem", flexShrink: 0 }}>
+          {(sub.creatorName || sub.creatorUsername || "?")[0].toUpperCase()}
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <p style={{ fontFamily: "'Outfit',sans-serif", fontWeight: 700, color: "#1f2937", fontSize: "0.95rem", marginBottom: 2 }}>{sub.creatorName || sub.creatorUsername || sub.creatorId}</p>
+          {sub.creatorUsername && <p style={{ fontFamily: "'Outfit',sans-serif", color: "#9ca3af", fontSize: "0.78rem", marginBottom: 8 }}>@{sub.creatorUsername}</p>}
+          <span style={{ background: "#dcfce7", color: "#166534", borderRadius: 99, padding: "2px 10px", fontSize: "0.68rem", fontWeight: 800, fontFamily: "'Outfit',sans-serif" }}>✓ Active</span>
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <button
+            onClick={onOpenChat}
+            style={{ position: "relative", background: "linear-gradient(135deg,#7c3aed,#a855f7)", color: "#fff", padding: "8px 16px", borderRadius: 10, fontWeight: 700, fontSize: "0.8rem", fontFamily: "'Outfit',sans-serif", textAlign: "center", border: "none", whiteSpace: "nowrap", cursor: "pointer" }}
+          >
+            💬 Open Chat
+            {unread > 0 && (
+              <span style={{ position: "absolute", top: -6, right: -6, minWidth: 20, height: 20, padding: "0 6px", borderRadius: 99, background: "#ef4444", color: "#fff", fontSize: "0.7rem", fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 0 0 2px #fff" }}>
+                {unread > 9 ? "9+" : unread}
+              </span>
+            )}
+          </button>
+          {sub.creatorUsername && (
+            <a href={`/${sub.creatorUsername}`} style={{ display: "block", color: "#7c3aed", padding: "7px 16px", borderRadius: 10, fontWeight: 700, fontSize: "0.78rem", textDecoration: "none", fontFamily: "'Outfit',sans-serif", textAlign: "center", border: "1.5px solid #ede9fe", whiteSpace: "nowrap" }}>View Public Profile →</a>
+          )}
+          <button
+            onClick={onManage}
+            disabled={portalLoading}
+            style={{ background: "none", color: "#6b7280", padding: "7px 16px", borderRadius: 10, fontWeight: 700, fontSize: "0.78rem", fontFamily: "'Outfit',sans-serif", textAlign: "center", border: "1.5px solid #e5e7eb", whiteSpace: "nowrap", cursor: portalLoading ? "wait" : "pointer" }}
+            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = "#f9fafb"; (e.currentTarget as HTMLElement).style.color = "#ef4444"; (e.currentTarget as HTMLElement).style.borderColor = "#fecaca"; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = "none"; (e.currentTarget as HTMLElement).style.color = "#6b7280"; (e.currentTarget as HTMLElement).style.borderColor = "#e5e7eb"; }}
+          >
+            {portalLoading ? "Opening…" : "Manage / Cancel"}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }

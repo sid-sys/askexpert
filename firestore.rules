@@ -84,6 +84,24 @@ service cloud.firestore {
                   || (isAuth() && (resource.data.creatorId == request.auth.uid
                                    || resource.data.followerId == request.auth.uid));
       allow write: if isAuth() || isAdmin();
+
+      // ── Per-subscription chat thread ─────────────────────────────────────
+      // Only the two participants in the parent subscription can read/write
+      // messages. The author must match request.auth.uid to prevent spoofing.
+      match /messages/{messageId} {
+        function parent() { return get(/databases/$(database)/documents/subscriptions/$(subId)).data; }
+        function isParticipant() {
+          return isAuth() && (parent().creatorId == request.auth.uid
+                           || parent().followerId == request.auth.uid);
+        }
+        allow read: if isAdmin() || isParticipant();
+        allow create: if isParticipant()
+                      && request.resource.data.senderId == request.auth.uid
+                      && request.resource.data.creatorId == parent().creatorId
+                      && request.resource.data.followerId == parent().followerId;
+        // Allow only the author to update (e.g. mark read) or delete their own.
+        allow update, delete: if isAdmin() || (isParticipant() && resource.data.senderId == request.auth.uid);
+      }
     }
 
     // ════════════════════════════════════════════════════════════════════════
