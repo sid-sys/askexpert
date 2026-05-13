@@ -66,10 +66,11 @@ export async function GET(req: NextRequest) {
             const subNetCts  = grossCents - subFeeCts;
             await adminDb.collection("users").doc(meta.creatorId).set(
               {
-                totalEarnings:    FieldValue.increment(grossCents),
-                totalCreatorNet:  FieldValue.increment(subNetCts),
-                totalPlatformFee: FieldValue.increment(subFeeCts),
-                updatedAt:        FieldValue.serverTimestamp(),
+                totalEarnings:           FieldValue.increment(grossCents),
+                totalCreatorNet:         FieldValue.increment(subNetCts),
+                totalPlatformFee:        FieldValue.increment(subFeeCts),
+                subscriptionNetEarnings: FieldValue.increment(subNetCts),
+                updatedAt:               FieldValue.serverTimestamp(),
               },
               { merge: true }
             );
@@ -171,10 +172,11 @@ export async function GET(req: NextRequest) {
             const netAtPay = grossAtPay - feeAtPay;
             await adminDb.collection("users").doc(creatorId).set(
               {
-                totalEarnings:    FieldValue.increment(grossAtPay),
-                totalCreatorNet:  FieldValue.increment(netAtPay),
-                totalPlatformFee: FieldValue.increment(feeAtPay),
-                updatedAt:        FieldValue.serverTimestamp(),
+                totalEarnings:      FieldValue.increment(grossAtPay),
+                totalCreatorNet:    FieldValue.increment(netAtPay),
+                totalPlatformFee:   FieldValue.increment(feeAtPay),
+                oneTimeNetEarnings: FieldValue.increment(netAtPay),
+                updatedAt:          FieldValue.serverTimestamp(),
               },
               { merge: true }
             );

@@ -105,10 +105,32 @@ export default function DashboardPage() {
   // ── Auto-trigger refund cron removed — handled by server-side cron only ─────
 
 
+  // Prefer the cached cumulative buckets the webhook writes per payment
+  // type. Fall back to a question-derived estimate (0.9 of pricePaid) when
+  // a creator's user doc predates those fields — old earnings will still
+  // show, just as a rough approximation.
+  const cachedOneTimeNet = (userProfile as any)?.oneTimeNetEarnings as number | undefined;
+  const cachedSubsNet    = (userProfile as any)?.subscriptionNetEarnings as number | undefined;
+  const cachedTotalNet   = (userProfile as any)?.totalCreatorNet as number | undefined;
+
+  const answeredQs = questions.filter((q) => q.status === "ANSWERED");
+  const oneTimeFallbackCents = answeredQs.reduce((s, q) => s + q.pricePaid * 0.9, 0);
+
+  // Use cached buckets when available, else fall back. For subscriptions
+  // (which we can't reconstruct from the questions collection) we derive
+  // it as totalCreatorNet minus the one-time bucket so legacy earnings
+  // are at least visible somewhere.
+  const oneTimeNetCents = typeof cachedOneTimeNet === "number" ? cachedOneTimeNet : oneTimeFallbackCents;
+  const subsNetCents = typeof cachedSubsNet === "number"
+    ? cachedSubsNet
+    : Math.max(0, (cachedTotalNet ?? 0) - oneTimeNetCents);
+
   const stats = {
     pending: questions.filter((q) => q.status === "PENDING").length,
-    answered: questions.filter((q) => q.status === "ANSWERED").length,
-    earned: questions.filter((q) => q.status === "ANSWERED").reduce((s, q) => s + q.pricePaid * 0.9, 0),
+    answered: answeredQs.length,
+    oneTimeNetCents,
+    subsNetCents,
+    earnedCents: oneTimeNetCents + subsNetCents,
     total: questions.length,
     newCount: questions.filter((q) => q.isNew).length,
     vacationLeadsCount: vacationLeads.length,
@@ -341,7 +363,12 @@ export default function DashboardPage() {
           { label: "Total Questions", value: stats.total, color: "#111", icon: "📨", bg: "#f0edff" },
           { label: "Pending", value: stats.pending, color: "#d97706", icon: "⏳", bg: "#fffbeb" },
           { label: "Answered", value: stats.answered, color: "#059669", icon: "✅", bg: "#ecfdf5" },
-          { label: "Earned", value: `$${(stats.earned/100).toFixed(2)}`, color: "#7c3aed", icon: "💰", bg: "#f5f3ff" },
+          // Two income cards — one-time question payments vs recurring fan
+          // monthly subscriptions. Both numbers are the creator's NET (after
+          // platform fee), pulled from the cached buckets the webhook writes
+          // per payment type.
+          { label: "From Questions", value: `$${(stats.oneTimeNetCents/100).toFixed(2)}`, color: "#7c3aed", icon: "💰", bg: "#f5f3ff" },
+          { label: "From Subscriptions", value: `$${(stats.subsNetCents/100).toFixed(2)}`, color: "#0ea5e9", icon: "🔁", bg: "#e0f2fe" },
           { label: "Vacation ROI", value: `${stats.vacationConversions}/${stats.vacationLeadsCount}`, color: "#d97706", icon: "🏖️", bg: "#fffbeb" },
         ].map((s) => (
           <div key={s.label} style={S.statCard}

@@ -75,6 +75,10 @@ export interface FirestoreUser {
   // estimate when these are missing (older docs).
   totalCreatorNet?: number;              // cents creator earned after fee
   totalPlatformFee?: number;             // cents kept by the platform
+  // Net split by payment type — lets the dashboard show "earned from
+  // questions" vs "earned from subscriptions" as separate stats.
+  oneTimeNetEarnings?: number;           // cents from one-time question payments
+  subscriptionNetEarnings?: number;      // cents from monthly fan subscriptions
 
   // ── Auto-upgrade billing (paid out of accrued earnings) ──────────────────
   // When the creator exceeds their plan's monthly cap and we auto-upgrade

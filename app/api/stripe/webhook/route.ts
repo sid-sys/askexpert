@@ -130,6 +130,9 @@ export async function POST(req: NextRequest) {
             totalEarnings: FieldValue.increment(grossCents),
             totalCreatorNet: FieldValue.increment(subNetCents),
             totalPlatformFee: FieldValue.increment(subFeeCents),
+            // Subscription-specific bucket so the dashboard can show
+            // "from subscriptions" separately from "from questions".
+            subscriptionNetEarnings: FieldValue.increment(subNetCents),
             updatedAt: FieldValue.serverTimestamp(),
           },
           { merge: true }
@@ -304,10 +307,15 @@ export async function POST(req: NextRequest) {
         const netCentsAtPay   = grossCentsAtPay - feeCentsAtPay;
         await adminDb.collection("users").doc(creatorId).set(
           {
-            totalEarnings:    FieldValue.increment(grossCentsAtPay),
-            totalCreatorNet:  FieldValue.increment(netCentsAtPay),
-            totalPlatformFee: FieldValue.increment(feeCentsAtPay),
-            updatedAt:        FieldValue.serverTimestamp(),
+            totalEarnings:        FieldValue.increment(grossCentsAtPay),
+            totalCreatorNet:      FieldValue.increment(netCentsAtPay),
+            totalPlatformFee:     FieldValue.increment(feeCentsAtPay),
+            // One-time-question bucket — mirrors subscriptionNetEarnings
+            // on the subscription branch so the dashboard can split the
+            // two streams without re-deriving them from the questions
+            // collection on every load.
+            oneTimeNetEarnings:   FieldValue.increment(netCentsAtPay),
+            updatedAt:            FieldValue.serverTimestamp(),
           },
           { merge: true }
         );
