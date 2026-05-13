@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { adminDb, FieldValue } from "@/lib/firebase-admin";
 import { stripe } from "@/lib/stripe";
 import { sendRefundEmail } from "@/lib/resend";
+import { resolveResponseTimeHours } from "@/lib/refund-helpers";
 
 /**
  * POST /api/cron/auto-refund
@@ -99,7 +100,10 @@ export async function POST(_req: NextRequest) {
 
         // Get creator responseTime
         const creatorName = q.creatorName || "The Creator";
-        const actualResponseTime = q.responseTimeHours || 72;
+        // Resolve the SLA window we'll surface in the email — prefer what
+        // was captured on the question, then derive from the expiry window,
+        // then look up the creator's current setting. Never hardcode 72h.
+        const actualResponseTime = await resolveResponseTimeHours(q, q.creatorId);
 
         await sendRefundEmail({
           to: q.followerEmail,
