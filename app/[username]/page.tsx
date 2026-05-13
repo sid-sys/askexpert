@@ -867,7 +867,7 @@ export default function CreatorProfilePage({ params }: { params: Promise<{ usern
           </p>
         )}
 
-        {/* SLA badge */}
+        {/* Response-time badge */}
         <div style={{ marginTop: 16, display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
           <span style={{
             display: "inline-flex", alignItems: "center", gap: 5,

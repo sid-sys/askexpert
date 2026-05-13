@@ -474,7 +474,7 @@ export default function FanDashboardPage() {
                             <div style={{ fontSize: "2.2rem", marginBottom: 10 }}>❓</div>
                             <p style={{ fontFamily: "'Outfit',sans-serif", color: "#1f2937", fontWeight: 700, margin: "0 0 4px", fontSize: "0.95rem" }}>No one-time questions yet</p>
                             <p style={{ fontFamily: "'Outfit',sans-serif", color: "#9ca3af", margin: "0 0 14px", fontSize: "0.82rem", lineHeight: 1.5 }}>
-                              Pay once to ask any creator a single question — answered within their SLA.
+                              Pay once to ask any creator a single question — answered within their response time.
                             </p>
                             <button onClick={() => go("discover")} style={{ background: "linear-gradient(135deg,#d97706,#f59e0b)", border: "none", color: "#fff", fontWeight: 700, cursor: "pointer", fontSize: "0.85rem", padding: "8px 20px", borderRadius: 99, fontFamily: "'Outfit',sans-serif" }}>
                               Find a Creator →

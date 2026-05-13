@@ -4,13 +4,13 @@
 - **Subscriber Question Flow**: Fans with active monthly memberships can now ask questions for free.
 - **Membership Login Enforcement**: Mandatory account creation/login for all monthly subscriptions to track member perks.
 - **Smart Profile Form**: Automatic pre-filling of name and email for authenticated fans.
-- **Dynamic SLA Framework**: Standardized `responseTimeHours` across the platform.
-- **SLA Freezing**: Saving SLA and creator details directly in the question document for reliability and performance.
+- **Dynamic Response-Time Framework**: Standardized `responseTimeHours` across the platform.
+- **Response-Time Freezing**: Saving the response-time window and creator details directly in the question document for reliability and performance.
 - **Admin Testing Tools**: Dynamic email preview and testing for creator-specific settings.
-- **Dynamic SLA Notifications**: Replaced hardcoded response times with creator-specific values in all system emails (Webhook, Notify, and both Refund Crons).
-- **Admin Test Suite**: Enhanced the admin panel to test emails with specific creator context (name/SLA).
+- **Dynamic Response-Time Notifications**: Replaced hardcoded response times with creator-specific values in all system emails (Webhook, Notify, and both Refund Crons).
+- **Admin Test Suite**: Enhanced the admin panel to test emails with specific creator context (name / response time).
 - **Email Content Cleanup**: Removed legacy instructions and hardcoded 72-hour text from templates, fully integrating the dynamic calculation model.
-- **Shared SLA Utils**: Centralized duration formatting logic for a consistent experience across web and email.
+- **Shared Duration Utils**: Centralized duration formatting logic for a consistent experience across web and email.
 - **Resend Service Hardening**: Refactored the email service layer for production reliability, including robust error handling, audit logging for every notification, and syntax fixes to prevent runtime crashes.
 - **Asker Name Capture**: Implemented a required name field in the question submission form to personalize the creator experience.
 - **Creator Dashboard Personalization**: Updated `QuestionCard` to display the asker's name instead of email, with email as a fallback.
@@ -35,9 +35,9 @@
 3. **Lenis Smooth Scrolling**: Integrate the `Lenis` library for cinematic, smooth scrolling across the dashboard and profile pages to enhance the premium feel of the platform.
 4. **Storage Cleanup Authentication**: Add a `CRON_SECRET` environment variable and require it in the `Authorization` header of the `/api/cron/cleanup-storage` endpoint.
 5. **Soft Deletion for Storage**: Before permanently deleting files, move them to an intermediate bucket or add a 30-day lifecycle expiration rule natively in Firebase Storage.
-6. **Smart Escalation**: Create a warning notification for creators when their SLA is 80% consumed to prevent accidental refunds.
-7. **SLA Badge on Profile**: Display the creator's "Actual Avg. Response Time" alongside their promised SLA on their profile to build trust through transparency.
-8. **Creator Performance Dashboard**: Provide creators with a chart showing their average response time vs. their promised SLA to help them optimize their workflow.
+6. **Smart Escalation**: Create a warning notification for creators when their response-time window is 80% consumed to prevent accidental refunds.
+7. **Response-Time Badge on Profile**: Display the creator's "Actual Avg. Response Time" alongside their promised window on their profile to build trust through transparency.
+8. **Creator Performance Dashboard**: Provide creators with a chart showing their average response time vs. their promised window to help them optimize their workflow.
 9. **Real-time Question Updates**: Integrate Firebase Listeners (`onSnapshot`) in the Dashboard to show new questions instantly without refreshing.
 10. **Custom Creator Slugs**: Allow creators to claim a custom URL slug (e.g., `askexpert.com/myname`) instead of just a numeric ID.
 11. **Native Sharing Integration**: For the "Copy Link" mobile action, utilize the Web Share API (`navigator.share`) to offer a native system share dialogue.

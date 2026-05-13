@@ -1,9 +1,10 @@
 // Helpers shared by the refund cron + auto-refund routes so the refund email
-// always reflects the creator's actual SLA — not a hardcoded 72-hour default.
+// always reflects the creator's actual response-time setting — not a
+// hardcoded 72-hour default.
 //
 // Resolution order for the response-time window we surface to the asker:
 //   1. The value captured on the question at checkout time (q.responseTimeHours).
-//      That's the SLA we actually enforced for this question.
+//      That's the window we actually enforced for this question.
 //   2. The derived window from (expiresAt - createdAt), used as a fallback for
 //      legacy questions written before responseTimeHours was being persisted.
 //   3. The creator's current responseTimeHours setting (single Firestore read).
@@ -26,7 +27,7 @@ export async function resolveResponseTimeHours(
   q: Record<string, any>,
   creatorId: string | undefined | null,
 ): Promise<number> {
-  // 1. Explicit field on the question — the SLA we charged against.
+  // 1. Explicit field on the question — the window we charged against.
   if (typeof q.responseTimeHours === "number" && q.responseTimeHours > 0) {
     return q.responseTimeHours;
   }

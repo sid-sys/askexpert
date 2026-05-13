@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
   const { emailType, to, creatorId } = await req.json();
   if (!to || !emailType) return NextResponse.json({ error: "Missing 'to' or 'emailType'" }, { status: 400 });
 
-  // Fetch optional creator data for realistic SLA testing
+  // Fetch optional creator data for realistic response-time testing
   let testResponseTime = 72;
   let testCreatorName = "Jane Expert";
 
