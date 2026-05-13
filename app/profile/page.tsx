@@ -1,5 +1,6 @@
 "use client";
 
+import { reportBug } from "@/lib/report-bug";
 import { useEffect, useRef, useState, useCallback, Suspense } from "react";
 import Swal from "sweetalert2";
 import { useAuth } from "@/context/AuthContext";
@@ -143,7 +144,7 @@ function SettingsContent() {
     vacationMode, setVacationMode,
     vacationUntil, setVacationUntil,
     vacationMessage, setVacationMessage,
-    saving, saved, saveNow
+    saving, saved, saveNow, isReady
   } = useProfileSettings();
 
   const [tab, setTab] = useState<Tab>("profile");
@@ -297,7 +298,7 @@ function SettingsContent() {
         else window.location.href = data.url;
       }
     } catch (err: any) {
-      alert(err.message || "Could not open billing portal. Try again.");
+      reportBug({ error: err, context: "app/profile/page.tsx" });
     } finally {
       setPortalLoading(false);
     }
@@ -324,7 +325,7 @@ function SettingsContent() {
       }
     } catch (err: any) {
       console.error("Payout setup error:", err);
-      alert(err.message || "Failed to connect payout. Try again.");
+      reportBug({ error: err, context: "app/profile/page.tsx" });
     } finally {
       setStripeLoading(false);
     }
@@ -420,7 +421,7 @@ function SettingsContent() {
                 vacationMessage={vacationMessage} setVacationMessage={setVacationMessage}
                 ALL_CATEGORIES={ALL_CATEGORIES}
               />
-              <SaveButton saving={saving} saved={saved} onClick={handleSave} />
+              <SaveButton saving={saving || !isReady} saved={saved} onClick={handleSave} />
             </>
           )}
 
@@ -440,7 +441,7 @@ function SettingsContent() {
                 setResponseTimeHours={setResponseTimeHours}
                 RESPONSE_TIME_OPTIONS={RESPONSE_TIME_OPTIONS}
               />
-              <SaveButton saving={saving} saved={saved} onClick={handleSave} />
+              <SaveButton saving={saving || !isReady} saved={saved} onClick={handleSave} />
             </>
           )}
 
@@ -473,7 +474,7 @@ function SettingsContent() {
                 earningsFormatted={earningsFormatted}
                 progressPct={progressPct}
               />
-              <SaveButton saving={saving} saved={saved} onClick={handleSave} />
+              <SaveButton saving={saving || !isReady} saved={saved} onClick={handleSave} />
             </>
           )}
         </div>

@@ -1,5 +1,6 @@
 "use client";
 
+import { reportBug } from "@/lib/report-bug";
 import { use, useEffect, useState } from "react";
 import { collection, query, where, getDocs, orderBy } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
@@ -325,7 +326,7 @@ export default function CreatorProfilePage({ params }: { params: Promise<{ usern
       });
       setSubscribingEmail("");
     } catch (err: any) {
-      Swal.fire({ title: "Error", text: err.message, icon: "error" });
+      reportBug({ error: err, context: "app/[username]/page.tsx" });
     } finally {
       setIsSubscribing(false);
     }
@@ -375,7 +376,7 @@ export default function CreatorProfilePage({ params }: { params: Promise<{ usern
         Swal.fire({ title: "Payment Error", text: data.error || "Payment setup failed.", icon: "error", confirmButtonColor: "var(--purple)" });
       }
     } catch (err: any) {
-      Swal.fire({ title: "Error", text: err.message, icon: "error", confirmButtonColor: "var(--purple)" });
+      reportBug({ error: err, context: "app/[username]/page.tsx" });
     } finally {
       setSubmitting(false);
     }
@@ -481,7 +482,7 @@ export default function CreatorProfilePage({ params }: { params: Promise<{ usern
         });
       } catch (err: any) {
         console.error(err);
-        Swal.fire({ title: "Error", text: err.message, icon: "error" });
+        reportBug({ error: err, context: "app/[username]/page.tsx" });
       } finally {
         setSubmitting(false);
       }

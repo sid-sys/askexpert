@@ -1,6 +1,7 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useCreatorCountLabel } from "@/lib/use-creator-count";
 
 const footerLinks = [
   { label: "About Us", href: "/about" },
@@ -26,6 +27,7 @@ const APP_ROUTES_NO_FOOTER = [
 
 export default function Footer() {
   const pathname = usePathname();
+  const expertCountLabel = useCreatorCountLabel();
   if (pathname && APP_ROUTES_NO_FOOTER.some((r) => pathname === r || pathname.startsWith(r + "/"))) {
     return null;
   }
@@ -68,6 +70,24 @@ export default function Footer() {
             }}
           >
             AskExpert
+          </span>
+          {/* Live experts tally — visible site-wide on every public page so
+              social proof stays in front of the visitor whatever route they
+              land on. */}
+          <span
+            style={{
+              marginLeft: 6,
+              padding: "3px 10px",
+              borderRadius: 99,
+              background: "rgba(124,58,237,0.1)",
+              color: "var(--primary)",
+              fontSize: "0.75rem",
+              fontWeight: 700,
+              fontFamily: "'Inter', sans-serif",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {expertCountLabel} experts listed
           </span>
         </div>
 

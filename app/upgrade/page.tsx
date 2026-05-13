@@ -1,5 +1,6 @@
 "use client";
 
+import { reportBug } from "@/lib/report-bug";
 import { useAuth } from "@/context/AuthContext";
 import { useProfileSettings } from "@/app/profile/useProfileSettings";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -124,7 +125,7 @@ export default function UpgradePage() {
         window.open(data.url, "_blank");
       }
     } catch (err: any) {
-      alert(err.message || "Could not open billing portal. Try again.");
+      reportBug({ error: err, context: "app/upgrade/page.tsx" });
     } finally {
       setPortalLoading(false);
     }
@@ -155,7 +156,7 @@ export default function UpgradePage() {
       }
       throw new Error("Checkout session missing URL");
     } catch (err: any) {
-      alert(err.message || "Could not start checkout. Try again.");
+      reportBug({ error: err, context: "app/upgrade/page.tsx" });
       setBusyPlan(null);
     }
   };
@@ -272,7 +273,7 @@ export default function UpgradePage() {
         });
       } catch { /* webhook will reconcile */ }
     } catch (err: any) {
-      alert(err.message || "Could not change plan. Try again.");
+      reportBug({ error: err, context: "app/upgrade/page.tsx" });
     } finally {
       setBusyPlan(null);
     }

@@ -149,6 +149,18 @@ service cloud.firestore {
     }
 
     // ════════════════════════════════════════════════════════════════════════
+    // FEEDBACK collection (bug reports + general feedback from reportBug)
+    //   - Write: server-side only (the /api/feedback route uses Admin SDK,
+    //            which bypasses rules; client writes go through that route).
+    //   - Read: admins only — the admin panel renders the bug-report list
+    //           and needs the user-identifying + error fields each doc carries.
+    // ════════════════════════════════════════════════════════════════════════
+    match /feedback/{id} {
+      allow read:  if isAdmin();
+      allow write: if false;
+    }
+
+    // ════════════════════════════════════════════════════════════════════════
     // Default: deny everything else
     // ════════════════════════════════════════════════════════════════════════
     match /{document=**} {

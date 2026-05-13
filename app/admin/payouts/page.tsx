@@ -1,5 +1,6 @@
 "use client";
 
+import { reportBug } from "@/lib/report-bug";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -89,7 +90,7 @@ export default function AdminPayoutsPage() {
       },
       (err) => {
         console.error("Failed to subscribe to payouts:", err);
-        Swal.fire("Error", err.message, "error");
+        reportBug({ error: err, context: "app/admin/payouts/page.tsx" });
         setDataLoading(false);
       },
     );
@@ -135,7 +136,7 @@ export default function AdminPayoutsPage() {
         setPayouts(prev => prev.map(p => p.id === payout.id ? { ...p, status: "paid", reference: refInput } : p));
         Swal.fire('Success', 'Payout marked as paid and creator notified.', 'success');
       } catch (err: any) {
-        Swal.fire('Error', err.message, 'error');
+        reportBug({ error: err, context: "app/admin/payouts/page.tsx" });
       } finally {
         setDataLoading(false);
       }
@@ -179,7 +180,7 @@ export default function AdminPayoutsPage() {
         setPayouts(prev => prev.map(p => p.id === payout.id ? { ...p, status: "cancelled", adminNotes: reason } : p));
         Swal.fire('Rejected!', 'Payout has been rejected and creator notified.', 'success');
       } catch (err: any) {
-        Swal.fire('Error', err.message, 'error');
+        reportBug({ error: err, context: "app/admin/payouts/page.tsx" });
       } finally {
         setDataLoading(false);
       }
@@ -209,7 +210,7 @@ export default function AdminPayoutsPage() {
 
       Swal.fire('Resent!', 'Notification email has been sent again.', 'success');
     } catch (err: any) {
-      Swal.fire('Error', err.message, 'error');
+      reportBug({ error: err, context: "app/admin/payouts/page.tsx" });
     } finally {
       setDataLoading(false);
     }

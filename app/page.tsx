@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import gsap from "gsap";
+import { useCreatorCountLabel } from "@/lib/use-creator-count";
 
 const FEATURES = [
   {
@@ -64,6 +65,7 @@ export default function LandingPage() {
   const [email, setEmail] = useState("");
   const [submitted, setSubmitted] = useState(false);
   const [isAnnual, setIsAnnual] = useState(true);
+  const expertCountLabel = useCreatorCountLabel();
 
   useEffect(() => {
     if (!heroRef.current) return;
@@ -91,7 +93,7 @@ export default function LandingPage() {
         <div style={{ position: "relative", zIndex: 1 }}>
           {/* Badge */}
           <div className="hero-item" style={{ display: "inline-flex", alignItems: "center", gap: 8, background: "#f5f3ff", border: "1px solid rgba(124,58,237,0.2)", borderRadius: 99, padding: "0.45rem 1rem", marginBottom: "1.5rem" }}>
-            <span style={{ fontSize: "0.85rem", color: "#7c3aed", fontWeight: 600, fontFamily: "'Inter', sans-serif" }}>✨ Now live — join 10,000+ experts</span>
+            <span style={{ fontSize: "0.85rem", color: "#7c3aed", fontWeight: 600, fontFamily: "'Inter', sans-serif" }}>✨ Now live — join {expertCountLabel} experts</span>
           </div>
 
           {/* Headline */}
@@ -188,7 +190,7 @@ export default function LandingPage() {
               ))}
             </div>
             <span style={{ fontFamily: "'Inter', sans-serif", fontSize: "0.9rem", color: "#6b7280", fontWeight: 500 }}>
-              <strong style={{ color: "#1f2937" }}>10,000+</strong> creators earning today
+              <strong style={{ color: "#1f2937" }}>{expertCountLabel}</strong> creators earning today
             </span>
           </div>
         </div>

@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { collection, getDocs } from "firebase/firestore";
+import { collection, getDocs, query, where, orderBy, limit } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/context/AuthContext";
 import { COLLECTIONS, FirestoreUser } from "@/lib/types";
@@ -34,13 +34,32 @@ interface CreatorSummary {
   creatorNet: number;       // cents, what they actually receive
 }
 
+interface BugReport {
+  id: string;
+  message:         string;   // user's free-text note
+  email:           string;
+  name:            string;
+  userUid:         string | null;
+  url:             string;
+  context:         string | null;
+  userAgent:       string;
+  errorName:       string;
+  errorMessage:    string;
+  errorStack:      string;
+  clientTimestamp: string | null;
+  createdAt:       Date | null;
+  status:          string;
+}
+
 export default function AdminPage() {
   const { user, userProfile, loading } = useAuth();
   const router = useRouter();
 
   const [users, setUsers] = useState<FirestoreUser[]>([]);
   const [subs,  setSubs]  = useState<SubscriptionRow[]>([]);
+  const [bugs,  setBugs]  = useState<BugReport[]>([]);
   const [dataLoading, setDataLoading] = useState(true);
+  const [expandedBug, setExpandedBug] = useState<string | null>(null);
 
   // Gate: only admins past this point.
   useEffect(() => {
@@ -58,9 +77,19 @@ export default function AdminPage() {
     (async () => {
       setDataLoading(true);
       try {
-        const [usersSnap, subsSnap] = await Promise.all([
+        // Bug reports query is wrapped separately because it may fail with
+        // a permission error if the firestore.rules update hasn't been
+        // deployed yet — we don't want that to break the whole admin page.
+        const bugQuery = query(
+          collection(db, "feedback"),
+          where("type", "==", "bug"),
+          orderBy("createdAt", "desc"),
+          limit(50),
+        );
+        const [usersSnap, subsSnap, bugsSnap] = await Promise.all([
           getDocs(collection(db, COLLECTIONS.USERS)),
           getDocs(collection(db, COLLECTIONS.SUBSCRIPTIONS)),
+          getDocs(bugQuery).catch((e) => { console.warn("feedback read failed:", e?.code || e?.message); return null; }),
         ]);
         if (cancelled) return;
         setUsers(usersSnap.docs.map(d => d.data() as FirestoreUser));
@@ -68,6 +97,27 @@ export default function AdminPage() {
           const data = d.data();
           return { creatorId: data.creatorId, status: data.status ?? "active" } as SubscriptionRow;
         }));
+        if (bugsSnap) {
+          setBugs(bugsSnap.docs.map(d => {
+            const x = d.data();
+            return {
+              id: d.id,
+              message:         x.message         || "",
+              email:           x.email           || "",
+              name:            x.name            || "",
+              userUid:         x.userUid         || null,
+              url:             x.url             || "",
+              context:         x.context         || null,
+              userAgent:       x.userAgent       || "",
+              errorName:       x.errorName       || "",
+              errorMessage:    x.errorMessage    || "",
+              errorStack:      x.errorStack      || "",
+              clientTimestamp: x.clientTimestamp || null,
+              createdAt:       x.createdAt?.toDate?.() ?? null,
+              status:          x.status          || "pending",
+            } as BugReport;
+          }));
+        }
       } finally {
         if (!cancelled) setDataLoading(false);
       }
@@ -272,6 +322,112 @@ export default function AdminPage() {
                         borderRadius: 99, transition: "width 0.6s ease",
                       }} />
                     </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </section>
+
+        {/* BUG REPORTS */}
+        <section style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 20, padding: "1.5rem", marginTop: 28, boxShadow: "0 4px 12px rgba(0,0,0,0.04)" }}>
+          <h2 style={{ fontFamily: "'Outfit', sans-serif", fontSize: "1.15rem", fontWeight: 800, margin: "0 0 4px" }}>
+            Bug Reports · {fmtInt(bugs.length)}
+          </h2>
+          <p style={{ color: "#6b7280", fontSize: "0.85rem", margin: "0 0 16px" }}>
+            Latest 50 reports submitted from the in-app &ldquo;Something went wrong&rdquo; modal.
+            Each row shows who hit it, the underlying error, and what the user typed.
+            Click a row to expand the full stack trace + user-agent.
+          </p>
+
+          {bugs.length === 0 ? (
+            <div style={{ padding: "1.5rem", color: "#9ca3af", textAlign: "center", border: "1px dashed #e5e7eb", borderRadius: 12 }}>
+              No bug reports yet — or this admin doesn&apos;t have read access to the
+              <code style={{ background: "#f3f4f6", padding: "1px 6px", borderRadius: 4, margin: "0 4px" }}>feedback</code>
+              collection (deploy <code style={{ background: "#f3f4f6", padding: "1px 6px", borderRadius: 4 }}>firestore.rules</code> if so).
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {bugs.map(b => {
+                const expanded = expandedBug === b.id;
+                const when = b.createdAt
+                  ? b.createdAt.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })
+                  : "(no timestamp)";
+                const whoLabel = b.name && b.name !== "Anonymous"
+                  ? `${b.name} · ${b.email || "no email"}`
+                  : (b.email && b.email !== "anonymous") ? b.email : "Anonymous";
+                return (
+                  <div
+                    key={b.id}
+                    style={{
+                      border: "1px solid #f3f4f6", borderRadius: 12,
+                      padding: "12px 14px", background: "#fafafa",
+                      cursor: "pointer",
+                    }}
+                    onClick={() => setExpandedBug(expanded ? null : b.id)}
+                  >
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, flexWrap: "wrap" }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontWeight: 700, color: "#1f2937", fontSize: "0.92rem", marginBottom: 2 }}>
+                          {whoLabel}
+                        </div>
+                        <div style={{ color: "#6b7280", fontSize: "0.78rem" }}>
+                          {when}
+                          {b.context && <> · <span style={{ color: "#7c3aed", fontWeight: 600 }}>{b.context}</span></>}
+                          {b.url && <> · <span style={{ color: "#9ca3af" }}>{b.url.replace(/^https?:\/\/[^/]+/, "")}</span></>}
+                        </div>
+                      </div>
+                      <span style={{
+                        padding: "2px 8px", borderRadius: 99,
+                        background: b.status === "pending" ? "#fef3c7" : "#dcfce7",
+                        color:      b.status === "pending" ? "#92400e" : "#166534",
+                        fontSize: "0.7rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em",
+                      }}>{b.status}</span>
+                    </div>
+
+                    {/* Error one-liner */}
+                    <div style={{
+                      marginTop: 8, padding: "6px 10px",
+                      background: "#fff", border: "1px solid #fecaca",
+                      borderRadius: 8, fontFamily: "monospace", fontSize: "0.78rem",
+                      color: "#b91c1c", overflow: "hidden", textOverflow: "ellipsis",
+                      whiteSpace: expanded ? "pre-wrap" : "nowrap",
+                    }}>
+                      {b.errorName ? `${b.errorName}: ` : ""}{b.errorMessage || "(no error message)"}
+                    </div>
+
+                    {/* User note */}
+                    {b.message && b.message !== "(no user note provided)" && (
+                      <div style={{
+                        marginTop: 8, padding: "8px 12px",
+                        background: "#f5f3ff", borderLeft: "3px solid #7c3aed",
+                        borderRadius: "0 8px 8px 0", color: "#374151", fontSize: "0.85rem",
+                        lineHeight: 1.5,
+                      }}>
+                        <span style={{ fontWeight: 700, color: "#7c3aed", fontSize: "0.72rem", textTransform: "uppercase", letterSpacing: "0.05em" }}>User said:</span>{" "}
+                        {b.message}
+                      </div>
+                    )}
+
+                    {expanded && (
+                      <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 8 }}>
+                        {b.errorStack && (
+                          <details open style={{ background: "#1f2937", color: "#e5e7eb", borderRadius: 8, padding: "10px 12px" }}>
+                            <summary style={{ cursor: "pointer", fontSize: "0.78rem", fontWeight: 700, color: "#fca5a5" }}>
+                              Stack trace
+                            </summary>
+                            <pre style={{ marginTop: 8, fontFamily: "monospace", fontSize: "0.72rem", lineHeight: 1.5, whiteSpace: "pre-wrap", wordBreak: "break-word", margin: 0 }}>
+                              {b.errorStack}
+                            </pre>
+                          </details>
+                        )}
+                        <div style={{ fontSize: "0.75rem", color: "#6b7280", display: "grid", gridTemplateColumns: "auto 1fr", gap: "4px 10px" }}>
+                          {b.userUid && (<><strong>UID</strong><code style={{ fontFamily: "monospace" }}>{b.userUid}</code></>)}
+                          {b.userAgent && (<><strong>UA</strong><code style={{ fontFamily: "monospace", wordBreak: "break-word" }}>{b.userAgent}</code></>)}
+                          {b.clientTimestamp && (<><strong>Client time</strong><code style={{ fontFamily: "monospace" }}>{b.clientTimestamp}</code></>)}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 );
               })}
