@@ -116,13 +116,24 @@ export default function BottomNav() {
   const profileInitial = (userProfile?.displayName || userProfile?.username || user?.email || "?")[0]?.toUpperCase() ?? "?";
   const profileName = userProfile?.displayName || userProfile?.username || user?.email?.split("@")[0] || "Me";
 
-  const sheetLinks: { href: string; label: string; emoji: string }[] = [
-    { href: "/profile", label: "Edit Profile", emoji: "📝" },
-    { href: "/profile?tab=pricing", label: "Pricing", emoji: "💰" },
-    { href: "/profile?tab=payout", label: "Payout", emoji: "🏦" },
-    ...(userProfile?.isAdmin ? [{ href: "/admin", label: "Admin", emoji: "⭐" }] : []),
-    { href: "/upgrade", label: "Account", emoji: "👤" },
-  ];
+  // Profile-sheet links are side-aware. Creator-only surfaces (Pricing,
+  // Payout, Account/Plan) only show on the creator side; the fan-side
+  // sheet stays slim because fans don't have those concepts. Anything
+  // already exposed as a tab in the bottom nav (Subs, Chats, Home,
+  // Find / Inbox / Fans / Stats) is intentionally omitted from the
+  // sheet so we don't duplicate links.
+  const sheetLinks: { href: string; label: string; emoji: string }[] = isFanView
+    ? [
+        { href: "/profile", label: "Edit Profile", emoji: "📝" },
+        ...(userProfile?.isAdmin ? [{ href: "/admin", label: "Admin", emoji: "⭐" }] : []),
+      ]
+    : [
+        { href: "/profile", label: "Edit Profile", emoji: "📝" },
+        { href: "/profile?tab=pricing", label: "Pricing", emoji: "💰" },
+        { href: "/profile?tab=payout", label: "Payout", emoji: "🏦" },
+        ...(userProfile?.isAdmin ? [{ href: "/admin", label: "Admin", emoji: "⭐" }] : []),
+        { href: "/upgrade", label: "Account", emoji: "👤" },
+      ];
 
   const openFeedback = () => {
     setShowProfile(false);
