@@ -6,6 +6,8 @@ import Link from "next/link";
 import { getIdToken } from "firebase/auth";
 import Swal from "sweetalert2";
 import { useAuth } from "@/context/AuthContext";
+import { collection, query, where, orderBy, limit, onSnapshot } from "firebase/firestore";
+import { db } from "@/lib/firebase";
 
 // Types derived from expected fields
 interface Payout {
@@ -52,34 +54,47 @@ export default function AdminPayoutsPage() {
   const [dataLoading, setDataLoading] = useState(true);
   const [filter, setFilter] = useState<"all" | "pending" | "paid" | "cancelled">("pending");
 
-  const fetchPayouts = async () => {
-    setDataLoading(true);
-    try {
-      const idToken = await getIdToken(user!);
-      const res = await fetch(`/api/admin/payouts?status=${filter}`, {
-        headers: { Authorization: `Bearer ${idToken}` }
-      });
-      if (!res.ok) throw new Error("Failed to fetch payouts");
-      const data = await res.json();
-      setPayouts(data.payouts || []);
-    } catch (err: any) {
-      console.error("Failed to fetch payouts:", err);
-      Swal.fire("Error", err.message, "error");
-    } finally {
-      setDataLoading(false);
-    }
-  };
-
   useEffect(() => {
     if (!loading && (!user || !userProfile?.isAdmin)) {
       router.replace("/dashboard");
     }
   }, [loading, user, userProfile, router]);
 
+  // Live payouts via onSnapshot. Firestore rules (firestore.rules
+  // pendingPayouts block) allow admin reads, so we can subscribe
+  // straight from the client and new pendingPayouts rows surface in
+  // real time without a manual refresh.
   useEffect(() => {
     if (!userProfile?.isAdmin) return;
-    fetchPayouts();
-  }, [userProfile, filter, user]);
+    setDataLoading(true);
+    const ref = collection(db, "pendingPayouts");
+    const q = filter === "all"
+      ? query(ref, orderBy("createdAt", "desc"), limit(100))
+      : query(ref, where("status", "==", filter), orderBy("createdAt", "desc"), limit(100));
+    const unsub = onSnapshot(
+      q,
+      (snap) => {
+        const rows = snap.docs.map((d) => {
+          const data = d.data() as any;
+          return {
+            id: d.id,
+            ...data,
+            createdAt:   data.createdAt,
+            paidAt:      data.paidAt ?? null,
+            cancelledAt: data.cancelledAt ?? null,
+          } as Payout;
+        });
+        setPayouts(rows);
+        setDataLoading(false);
+      },
+      (err) => {
+        console.error("Failed to subscribe to payouts:", err);
+        Swal.fire("Error", err.message, "error");
+        setDataLoading(false);
+      },
+    );
+    return () => unsub();
+  }, [userProfile, filter]);
 
   const handleMarkPaid = async (payout: Payout) => {
     const { value: refInput } = await Swal.fire({
@@ -256,16 +271,15 @@ export default function AdminPayoutsPage() {
             <p style={{ color: "#6b7280", fontSize: "0.88rem", margin: 0 }}>Review and process creator payout requests.</p>
           </div>
           <div style={{ display: 'flex', gap: 8, flexWrap: "wrap" }}>
-            <button 
-              onClick={() => fetchPayouts()} 
-              style={{ 
-                padding: "6px 14px", borderRadius: 20, fontSize: "0.85rem", fontWeight: 600, 
-                border: "1.5px solid #e5e7eb", background: "#fff", color: "#6b7280", cursor: "pointer",
-                display: 'flex', alignItems: 'center', gap: 6
-              }}
-            >
-              🔄 Refresh
-            </button>
+            {/* Live via onSnapshot — no manual refresh needed. The chip
+                doubles as a status indicator. */}
+            <span style={{
+              padding: "6px 14px", borderRadius: 20, fontSize: "0.85rem", fontWeight: 600,
+              border: "1.5px solid #d1fae5", background: "#ecfdf5", color: "#065f46",
+              display: 'flex', alignItems: 'center', gap: 6,
+            }}>
+              🟢 Live
+            </span>
             {(["all", "pending", "paid", "cancelled"] as const).map(f => (
               <button
                 key={f}

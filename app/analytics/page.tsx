@@ -4,10 +4,11 @@ import { useEffect, useState, useMemo } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { useRouter } from "next/navigation";
 import {
-  collection, query, where, getDocs, orderBy,
+  collection, query, where, onSnapshot, orderBy,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { FirestoreQuestion, COLLECTIONS } from "@/lib/types";
+import { getPlatformFeePercent } from "@/lib/stripe";
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, BarChart, Bar,
@@ -42,14 +43,14 @@ function askerDisplayLabel(q: FirestoreQuestion): string {
   return maskEmail(q.followerEmail);
 }
 
-function groupByDay(questions: FirestoreQuestion[]) {
+function groupByDay(questions: FirestoreQuestion[], creatorNetRate: number) {
   const map: Record<string, { date: string; earned: number; questions: number }> = {};
   questions.forEach((q) => {
     const d = new Date(q.createdAt);
     const key = `${d.getMonth() + 1}/${d.getDate()}`;
     if (!map[key]) map[key] = { date: key, earned: 0, questions: 0 };
     map[key].questions++;
-    if (q.status === "ANSWERED") map[key].earned += q.pricePaid * 0.9;
+    if (q.status === "ANSWERED") map[key].earned += q.pricePaid * creatorNetRate;
   });
   return Object.values(map).slice(-14);
 }
@@ -67,7 +68,7 @@ const TOOLTIP_STYLE = {
 
 // ── COMPONENT ──────────────────────────────────────────────────────────────
 export default function AnalyticsPage() {
-  const { user, loading } = useAuth();
+  const { user, userProfile, loading } = useAuth();
   const router = useRouter();
   const [questions, setQuestions] = useState<FirestoreQuestion[]>([]);
   const [fetching, setFetching] = useState(true);
@@ -77,16 +78,19 @@ export default function AnalyticsPage() {
     if (!loading && !user) router.push("/auth");
   }, [user, loading, router]);
 
+  // Live questions feed — onSnapshot keeps the charts + totals in sync the
+  // moment a new question is paid, answered, or refunded. Was getDocs (single
+  // snapshot on mount); analytics would otherwise show stale numbers until
+  // the user manually refreshed.
   useEffect(() => {
     if (!user) return;
-    const fetchData = async () => {
-      try {
-        const q = query(
-          collection(db, COLLECTIONS.QUESTIONS),
-          where("creatorId", "==", user.uid),
-          orderBy("createdAt", "asc")
-        );
-        const snap = await getDocs(q);
+    const unsub = onSnapshot(
+      query(
+        collection(db, COLLECTIONS.QUESTIONS),
+        where("creatorId", "==", user.uid),
+        orderBy("createdAt", "asc"),
+      ),
+      (snap) => {
         const qs = snap.docs.map((d) => ({
           ...d.data(),
           id: d.id,
@@ -94,15 +98,12 @@ export default function AnalyticsPage() {
           answeredAt: d.data().answeredAt?.toDate?.() || null,
           expiresAt: d.data().expiresAt?.toDate?.() || new Date(),
         })) as FirestoreQuestion[];
-        if (qs.length > 0) {
-          setQuestions(qs);
-        }
-      } catch (err) {
-        console.error("Error fetching analytics data:", err);
-      }
-      setFetching(false);
-    };
-    fetchData();
+        setQuestions(qs);
+        setFetching(false);
+      },
+      (err) => { console.error("Error fetching analytics data:", err); setFetching(false); },
+    );
+    return () => unsub();
   }, [user]);
 
   // Derived stats — filtered by date range
@@ -111,7 +112,15 @@ export default function AnalyticsPage() {
     return cutoff ? questions.filter(q => new Date(q.createdAt) >= cutoff) : questions;
   }, [questions, dateRange]);
 
-  const totalEarned    = filteredQuestions.filter(q => q.status === "ANSWERED").reduce((s, q) => s + q.pricePaid * 0.9, 0);
+  // Honour the creator's current plan fee instead of the legacy hard-coded
+  // 0.9 multiplier. Free=15%, Creator=5%, Pro=0% — all live in lib/stripe.
+  // For a precise "all-time" total we'd want the cached oneTimeNetEarnings
+  // bucket (sum of net at fee-at-payment time), but here we're filtering by
+  // a date range so we re-derive against today's tier.
+  const platformFeePct = getPlatformFeePercent((userProfile as any)?.platformPlan ?? "free");
+  const creatorNetRate = (100 - platformFeePct) / 100;
+
+  const totalEarned    = filteredQuestions.filter(q => q.status === "ANSWERED").reduce((s, q) => s + q.pricePaid * creatorNetRate, 0);
   const totalQuestions = filteredQuestions.length;
   const answered       = filteredQuestions.filter(q => q.status === "ANSWERED").length;
   const refunded       = filteredQuestions.filter(q => q.status === "REFUNDED").length;
@@ -124,7 +133,7 @@ export default function AnalyticsPage() {
     return `${Math.floor(avg / 3_600_000)}h avg`;
   })();
 
-  const chartData = groupByDay(filteredQuestions);
+  const chartData = groupByDay(filteredQuestions, creatorNetRate);
   const topAskers = (() => {
     const groups: Record<string, { label: string; count: number; totalSpent: number }> = {};
     filteredQuestions.forEach(q => {
@@ -231,7 +240,7 @@ export default function AnalyticsPage() {
               askerDisplayLabel(q),
               q.status,
               `$${(q.pricePaid / 100).toFixed(2)}`,
-              `"${(q.body || "").replace(/"/g, '""')}"`
+              `"${(q.content || "").replace(/"/g, '""')}"`
             ]);
             const csv = [header, ...rows].map(e => e.join(",")).join("\n");
             const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
