@@ -465,16 +465,18 @@ export default function ChatThread({
               onClick={onBack}
               aria-label="Back to chat list"
               title="Back"
+              className="chat-icon-btn chat-back-btn"
               style={{
-                width: 34, height: 34, borderRadius: "50%",
+                width: 40, height: 40, borderRadius: "50%",
                 border: "none", background: "#f3f4f6", color: "#1f2937",
                 cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
                 flexShrink: 0,
+                padding: 0,
               }}
               onMouseEnter={e => (e.currentTarget.style.background = "#e5e7eb")}
               onMouseLeave={e => (e.currentTarget.style.background = "#f3f4f6")}
             >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                 <polyline points="15 18 9 12 15 6"/>
               </svg>
             </button>
@@ -607,25 +609,33 @@ export default function ChatThread({
             </div>
           )}
 
-          <div style={{
+          <div className="chat-input-row" style={{
             borderTop: (pendingFiles.length > 0 || replyingTo) ? "none" : "1px solid #f0f0f0",
-            padding: 10, display: "flex", gap: 8, alignItems: "center",
+            padding: 8, display: "flex", gap: 6, alignItems: "center",
             background: "#fff",
             flexShrink: 0, // Pin to bottom — never gets squeezed by the messages list
+            minWidth: 0,
+            // The safe-area inset keeps the send button above the iOS home
+            // indicator when the chat is in the mobile overlay mode.
+            paddingBottom: `calc(8px + env(safe-area-inset-bottom))`,
           }}>
             <input ref={fileInputRef} type="file" multiple accept="image/*,audio/*,video/*,application/pdf,application/zip,.doc,.docx,.txt,.xlsx,.csv" style={{ display: "none" }} onChange={onFilePicked} />
             <button
               type="button"
               title="Attach file or image"
+              aria-label="Attach file"
+              className="chat-icon-btn"
               onClick={() => fileInputRef.current?.click()}
-              style={{ width: 36, height: 36, borderRadius: "50%", border: "1.5px solid #e5e7eb", background: "#fff", color: "#6b7280", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.05rem" }}
+              style={{ width: 38, height: 38, borderRadius: "50%", border: "1.5px solid #e5e7eb", background: "#fff", color: "#6b7280", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.05rem", flexShrink: 0, padding: 0 }}
             >📎</button>
             <button
               type="button"
               title="Record voice note"
+              aria-label="Record voice note"
+              className="chat-icon-btn"
               onClick={startRecording}
               disabled={!!pendingVoice}
-              style={{ width: 36, height: 36, borderRadius: "50%", border: "1.5px solid #e5e7eb", background: "#fff", color: "#6b7280", cursor: pendingVoice ? "not-allowed" : "pointer", opacity: pendingVoice ? 0.4 : 1, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.05rem" }}
+              style={{ width: 38, height: 38, borderRadius: "50%", border: "1.5px solid #e5e7eb", background: "#fff", color: "#6b7280", cursor: pendingVoice ? "not-allowed" : "pointer", opacity: pendingVoice ? 0.4 : 1, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.05rem", flexShrink: 0, padding: 0 }}
             >🎙️</button>
 
             {/* Where the text input normally sits — when a voice note is staged,
@@ -656,7 +666,7 @@ export default function ChatThread({
                 onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); performSend(); } }}
                 placeholder="Type your message…"
                 disabled={sending}
-                style={{ flex: 1, height: 40, borderRadius: 99, border: "1.5px solid #e5e7eb", padding: "0 14px", fontFamily: "'Outfit',sans-serif", fontSize: "0.9rem", outline: "none" }}
+                style={{ flex: 1, minWidth: 0, height: 40, borderRadius: 99, border: "1.5px solid #e5e7eb", padding: "0 14px", fontFamily: "'Outfit',sans-serif", fontSize: "0.9rem", outline: "none", boxSizing: "border-box" }}
               />
             )}
 
@@ -666,9 +676,11 @@ export default function ChatThread({
                 <button
                   onClick={performSend}
                   disabled={!canSend}
-                  style={{ height: 40, padding: "0 18px", borderRadius: 99, border: "none", background: canSend ? "linear-gradient(135deg,#7c3aed,#a855f7)" : "#e5e7eb", color: "#fff", fontWeight: 800, fontFamily: "'Outfit',sans-serif", fontSize: "0.85rem", cursor: canSend ? "pointer" : "not-allowed" }}
+                  aria-label="Send message"
+                  className="chat-send-btn"
+                  style={{ height: 40, padding: "0 14px", borderRadius: 99, border: "none", background: canSend ? "linear-gradient(135deg,#7c3aed,#a855f7)" : "#e5e7eb", color: "#fff", fontWeight: 800, fontFamily: "'Outfit',sans-serif", fontSize: "0.85rem", cursor: canSend ? "pointer" : "not-allowed", flexShrink: 0 }}
                 >
-                  {sending ? "Sending…" : "Send"}
+                  {sending ? "…" : "Send"}
                 </button>
               );
             })()}
@@ -684,6 +696,32 @@ export default function ChatThread({
         audio::-webkit-media-controls-overflow-menu-list,
         audio::-internal-media-controls-overflow-button {
           display: none !important;
+        }
+        /* Override the universal button rule in globals.css (forces padding
+           6px 14px + border-radius 8px + font-size 0.75rem on every <button>).
+           Without these specific overrides the chat header back arrow and
+           input-row icon buttons render as squashed pills instead of circles. */
+        button.chat-icon-btn {
+          padding: 0 !important;
+          border-radius: 50% !important;
+          font-size: 1.05rem !important;
+          font-weight: 600 !important;
+        }
+        button.chat-back-btn {
+          font-size: 0 !important;
+        }
+        button.chat-send-btn {
+          padding: 0 14px !important;
+          border-radius: 99px !important;
+          font-size: 0.85rem !important;
+          font-weight: 800 !important;
+        }
+        .chat-input-row {
+          box-sizing: border-box;
+        }
+        .chat-input-row input[type="text"],
+        .chat-input-row input:not([type]) {
+          box-sizing: border-box;
         }
       `}</style>
     </div>

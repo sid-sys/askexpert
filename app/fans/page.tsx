@@ -31,6 +31,25 @@ function displayNameFor(s: Subscriber, fallbackProfileName?: string): string {
   return "Fan";
 }
 
+// Cached profile-side data we pull from the users collection for each
+// subscriber so the chat header can show their actual name + last-seen.
+type FanMeta = { name?: string; lastSeen?: Date | null; isOnline?: boolean };
+
+function fanStatusLine(meta: FanMeta | undefined): string {
+  if (!meta) return "";
+  if (meta.isOnline) return "Online now";
+  if (!meta.lastSeen) return "Offline";
+  const diff = Date.now() - meta.lastSeen.getTime();
+  const mins = Math.floor(diff / 60_000);
+  if (mins < 1) return "Last seen just now";
+  if (mins < 60) return `Last seen ${mins}m ago`;
+  const hrs = Math.floor(diff / 3_600_000);
+  if (hrs < 24) return `Last seen ${hrs}h ago`;
+  const days = Math.floor(diff / 86_400_000);
+  if (days < 7) return `Last seen ${days}d ago`;
+  return `Last seen ${meta.lastSeen.toLocaleDateString(undefined, { month: "short", day: "numeric" })}`;
+}
+
 export default function FansPage() {
   const { user, loading } = useAuth();
   const router = useRouter();
@@ -38,9 +57,10 @@ export default function FansPage() {
   const [subscribers, setSubscribers] = useState<Subscriber[]>([]);
   const [fetching, setFetching] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  // followerId -> displayName from the users collection (filled lazily for
-  // subscribers whose subscription doc didn't record followerName).
-  const [profileNames, setProfileNames] = useState<Record<string, string>>({});
+  // followerId -> profile metadata (displayName, online status, last seen)
+  // pulled from the users collection. Filled lazily on first render of each
+  // subscriber so we don't fan out reads on mount.
+  const [profileMeta, setProfileMeta] = useState<Record<string, FanMeta>>({});
   // Single-pane mobile switching: track viewport width so we render either the
   // chat list OR the active thread, not both, on small screens. Uses the same
   // 900px breakpoint as the global Sidebar + BottomNav (they collapse to the
@@ -123,35 +143,43 @@ export default function FansPage() {
     return () => unsub();
   }, [user]);
 
-  // Lazily look up displayName for subscribers without a followerName so we
-  // don't leak the raw email. Skips lookups we've already done.
+  // Lazily look up displayName + last-seen for every subscriber we have a
+  // followerId for. Re-reads the doc each time the subscriber list changes
+  // so the chat header reflects the fan's most recent online state without
+  // forcing a live subscription per fan.
   useEffect(() => {
-    const missing = subscribers.filter(s => !s.followerName?.trim() && s.followerId && !profileNames[s.followerId!]);
-    if (missing.length === 0) return;
+    const targets = subscribers.filter(s => s.followerId && !profileMeta[s.followerId!]);
+    if (targets.length === 0) return;
     let cancelled = false;
     (async () => {
-      const updates: Record<string, string> = {};
-      for (const s of missing) {
+      const updates: Record<string, FanMeta> = {};
+      for (const s of targets) {
         try {
           const snap = await getDoc(doc(db, COLLECTIONS.USERS, s.followerId!));
-          if (snap.exists()) {
-            const data = snap.data() as any;
-            const name = data.displayName?.trim() || data.username?.trim();
-            if (name) updates[s.followerId!] = name;
-          }
+          if (!snap.exists()) continue;
+          const data = snap.data() as any;
+          const name = data.displayName?.trim() || data.username?.trim() || undefined;
+          const lastSeen = data.lastSeen?.toDate?.() ?? null;
+          const isOnline = !!data.isOnline;
+          updates[s.followerId!] = { name, lastSeen, isOnline };
         } catch { /* ignore */ }
       }
       if (!cancelled && Object.keys(updates).length > 0) {
-        setProfileNames(prev => ({ ...prev, ...updates }));
+        setProfileMeta(prev => ({ ...prev, ...updates }));
       }
     })();
     return () => { cancelled = true; };
-  }, [subscribers, profileNames]);
+  }, [subscribers, profileMeta]);
 
-  const selected = useMemo(
-    () => subscribers.find((s) => s.id === selectedId) ?? subscribers[0] ?? null,
-    [subscribers, selectedId]
-  );
+  // On mobile we want the fans list to be the landing view — chat only opens
+  // after an explicit tap. Auto-fallback to the first subscriber stays on
+  // desktop so the right pane is never empty.
+  const selected = useMemo(() => {
+    const match = subscribers.find((s) => s.id === selectedId) ?? null;
+    if (match) return match;
+    if (isMobile) return null;
+    return subscribers[0] ?? null;
+  }, [subscribers, selectedId, isMobile]);
 
   const activeCount = subscribers.filter((s) => s.status === "active").length;
   const totalMRR = subscribers
@@ -212,7 +240,7 @@ export default function FansPage() {
                 }}>
                   {subscribers.map((s) => {
                     const isActive = !isMobile && (selected?.id ?? null) === s.id;
-                    const name = displayNameFor(s, s.followerId ? profileNames[s.followerId] : undefined);
+                    const name = displayNameFor(s, s.followerId ? profileMeta[s.followerId]?.name : undefined);
                     return (
                       <SubscriberRow
                         key={s.id}
@@ -243,8 +271,8 @@ export default function FansPage() {
                     creatorId={user!.uid}
                     followerId={selected.followerId}
                     viewerRole="creator"
-                    counterpartName={displayNameFor(selected, profileNames[selected.followerId])}
-                    counterpartSubtitle={`Subscriber since ${selected.createdAt.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })} · $${(selected.pricePerMonth / 100).toFixed(2)}/mo`}
+                    counterpartName={displayNameFor(selected, profileMeta[selected.followerId]?.name)}
+                    counterpartSubtitle={fanStatusLine(profileMeta[selected.followerId])}
                     height={mobileInChat ? "100%" : "100%"}
                     flush={!mobileInChat}
                     onBack={isMobile ? () => setSelectedId(null) : undefined}
