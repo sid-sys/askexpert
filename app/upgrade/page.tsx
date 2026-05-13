@@ -147,8 +147,40 @@ export default function UpgradePage() {
   // a new one. Used when moving creator <-> pro so we don't end up with two
   // parallel platform subscriptions in Stripe (the bug behind the duplicate
   // "AskExpert Creator Plan" rows the user saw in the billing portal).
+  //
+  // We DON'T re-route through Stripe Checkout for this case — Stripe will
+  // charge the customer's existing default payment method and prorate the
+  // difference. We surface a confirmation modal first so the user isn't
+  // surprised by a silent charge.
   const handleChangePlan = async (plan: "creator" | "pro") => {
     if (!user) return;
+
+    const target = plan === "pro"
+      ? { name: "Pro",     price: "$9.99/month", fee: "0%" }
+      : { name: "Creator", price: "$4.99/month", fee: "5%" };
+    const currentLabel = PLAN_LABEL[platformPlan] ?? "your current plan";
+    const isUp = (platformPlan === "free")
+      || (platformPlan === "creator" && plan === "pro");
+
+    const confirm = await Swal.fire({
+      icon: "question",
+      title: `${isUp ? "Upgrade" : "Downgrade"} to ${target.name}?`,
+      html: `
+        <div style="text-align:left; font-size:0.92rem; line-height:1.55;">
+          Switching from <strong>${currentLabel}</strong> to <strong>${target.name}</strong> (${target.price}, ${target.fee} platform fee).<br/><br/>
+          We'll <strong>charge your card on file</strong> for the prorated difference on your next invoice — Stripe handles the math automatically.
+          If you have duplicate plan subscriptions from earlier upgrades, they'll be cancelled automatically too.
+        </div>
+      `,
+      showCancelButton: true,
+      confirmButtonText: `Yes, switch to ${target.name}`,
+      cancelButtonText: "Not now",
+      confirmButtonColor: "#7c3aed",
+      cancelButtonColor: "#6b7280",
+      reverseButtons: true,
+    });
+    if (!confirm.isConfirmed) return;
+
     setBusyPlan(plan);
     try {
       const { getIdToken } = await import("firebase/auth");
@@ -167,14 +199,29 @@ export default function UpgradePage() {
       }
       if (!res.ok) throw new Error(data.error || "Could not change plan");
 
+      const cancelled = (data?.cancelledDuplicates ?? []).length;
       await Swal.fire({
         icon: "success",
-        title: `You're on ${plan === "pro" ? "Pro" : "Creator"} now! 🎉`,
-        text: "Stripe prorated the difference on your next invoice.",
+        title: `You're on ${target.name} now! 🎉`,
+        html: `
+          <div style="font-size:0.92rem; line-height:1.5;">
+            Stripe prorated the difference on your next invoice.
+            ${cancelled > 0 ? `<br/><br/><strong>${cancelled}</strong> duplicate subscription${cancelled === 1 ? "" : "s"} cleaned up automatically.` : ""}
+          </div>
+        `,
         confirmButtonColor: "#7c3aed",
-        timer: 3500,
+        timer: 4500,
         timerProgressBar: true,
       });
+
+      // Pull the latest state from Stripe so the badge / cards reflect
+      // the new tier without a manual refresh.
+      try {
+        await fetch("/api/stripe/sync-plan", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+        });
+      } catch { /* swallow — webhook will reconcile */ }
     } catch (err: any) {
       alert(err.message || "Could not change plan. Try again.");
     } finally {

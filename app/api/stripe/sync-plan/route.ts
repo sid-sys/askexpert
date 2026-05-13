@@ -5,6 +5,11 @@
 // stripeCustomerId). Lets the /upgrade page reflect changes immediately after
 // the Stripe Checkout redirect even when the webhook isn't running locally,
 // and recovers from a cancellation by flipping platformPlan back to "free".
+//
+// Side-effect: if the user ended up with multiple active platform-plan
+// subscriptions (legacy duplicates from earlier buggy upgrade flows), all
+// but the kept one are cancelled so the Billing Portal stops showing
+// them. The newest active sub is kept.
 import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
 import { stripe } from "@/lib/stripe";
@@ -20,6 +25,19 @@ function resolvePlanFromSub(sub: Stripe.Subscription): "creator" | "pro" | null 
   if (priceId === process.env.STRIPE_CREATOR_PRICE_ID || priceId === process.env.STRIPE_CREATOR_ANNUAL_PRICE_ID) return "creator";
   if (priceId === process.env.STRIPE_PRO_PRICE_ID || priceId === process.env.STRIPE_PRO_ANNUAL_PRICE_ID) return "pro";
   return null;
+}
+
+const PLATFORM_PRICE_IDS = [
+  process.env.STRIPE_CREATOR_PRICE_ID,
+  process.env.STRIPE_PRO_PRICE_ID,
+  process.env.STRIPE_CREATOR_ANNUAL_PRICE_ID,
+  process.env.STRIPE_PRO_ANNUAL_PRICE_ID,
+].filter(Boolean) as string[];
+
+function isPlatformSub(s: Stripe.Subscription): boolean {
+  if (s.status !== "active" && s.status !== "trialing" && s.status !== "past_due") return false;
+  const priceId = s.items.data[0]?.price?.id;
+  return !!priceId && PLATFORM_PRICE_IDS.includes(priceId);
 }
 
 export async function POST(req: NextRequest) {
@@ -55,23 +73,45 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ plan: "free", subId: null, source: "no-customer" });
     }
 
-    // Pull recent subscriptions. We ask for all statuses so a cancelled sub
-    // still shows up and we can confidently drop the user back to "free".
+    // Pull every subscription on the customer so we can:
+    //   a) decide which platform sub is the keeper, and
+    //   b) cancel any duplicates that snuck in from earlier buggy flows.
     const subsResp = await stripe.subscriptions.list({
       customer: customerId,
       status: "all",
-      limit: 20,
+      limit: 50,
     });
+
+    const platformSubs = subsResp.data.filter(isPlatformSub);
+
+    // Keeper: prefer cached subId if it's still in the active list, else the
+    // newest one. Anything else gets cancelled so the Billing Portal stops
+    // showing duplicates.
+    const cachedId = userData.platformPlanStripeSubId as string | undefined;
+    const keeper = (cachedId && platformSubs.find((s) => s.id === cachedId))
+      || platformSubs.slice().sort((a, b) => (b.created ?? 0) - (a.created ?? 0))[0]
+      || null;
+
+    const cancelledDuplicates: string[] = [];
+    if (keeper) {
+      const dupes = platformSubs.filter((s) => s.id !== keeper.id);
+      for (const d of dupes) {
+        try {
+          await stripe.subscriptions.cancel(d.id, { prorate: true });
+          cancelledDuplicates.push(d.id);
+        } catch (e: any) {
+          console.error(`[sync-plan] failed to cancel duplicate sub ${d.id}:`, e?.message ?? e);
+        }
+      }
+    }
 
     let plan: "free" | "creator" | "pro" = "free";
     let activeSubId: string | null = null;
-    for (const sub of subsResp.data) {
-      if (sub.status !== "active" && sub.status !== "trialing") continue;
-      const resolved = resolvePlanFromSub(sub);
+    if (keeper) {
+      const resolved = resolvePlanFromSub(keeper);
       if (resolved) {
         plan = resolved;
-        activeSubId = sub.id;
-        break;
+        activeSubId = keeper.id;
       }
     }
 
@@ -85,7 +125,12 @@ export async function POST(req: NextRequest) {
       { merge: true },
     );
 
-    return NextResponse.json({ plan, subId: activeSubId, source: "stripe" });
+    return NextResponse.json({
+      plan,
+      subId: activeSubId,
+      source: "stripe",
+      cancelledDuplicates,
+    });
   } catch (err: any) {
     console.error("[sync-plan] error:", err);
     return NextResponse.json({ error: err.message ?? "sync failed" }, { status: 500 });
