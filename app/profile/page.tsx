@@ -163,13 +163,13 @@ function SettingsContent() {
   const earningsFormatted = `$${(totalEarnings / 100).toFixed(2)}`;
   const progressPct       = Math.min(100, (totalEarnings / 5000) * 100);
 
-  // ── Monthly cap + auto-upgrade enforcement state ──────────────────────────
-  // We ask the server for the last-30-day earnings + plan cap on payout tab
-  // mount. The same endpoint also runs the auto-upgrade-from-earnings logic
-  // and sets paymentDue when accrued earnings can't cover the next-tier fee.
+  // ── Lifetime cap + auto-upgrade enforcement state ────────────────────────
+  // We ask the server for the lifetime gross + plan cap on payout tab mount.
+  // The same endpoint runs the auto-upgrade-from-earnings logic and sets
+  // paymentDue when accrued earnings can't cover the next-tier fee.
   type PlanBalance = {
     plan: string;
-    monthlyEarningsCents: number;
+    lifetimeEarningsCents: number;
     capCents: number;
     exceeded: boolean;
     upgradedTo?: string;
@@ -441,8 +441,8 @@ function SettingsContent() {
                 feePercent={feePercent}
                 platformCutCents={platformCutCents}
                 creatorNetCents={creatorNetCents}
-                monthlyEarningsCents={planBalance?.monthlyEarningsCents ?? null}
-                monthlyCapCents={planBalance?.capCents ?? null}
+                lifetimeEarningsCents={planBalance?.lifetimeEarningsCents ?? null}
+                lifetimeCapCents={planBalance?.capCents ?? null}
                 exceededCap={planBalance?.exceeded ?? false}
                 upgradedTo={planBalance?.upgradedTo}
                 paymentDue={paymentDue}

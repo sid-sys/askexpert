@@ -2,27 +2,27 @@
 //
 // Earnings-cap enforcement loop. For the authenticated creator:
 //
-//   1. Compute their last-30-day gross earnings from the questions collection.
-//   2. If they're over their current plan's monthly cap AND there is a higher
-//      tier, attempt to auto-upgrade them. The next tier's monthly fee is
-//      deducted from totalEarnings (the platform pays itself out of the
-//      creator's accrued earnings instead of charging their card).
+//   1. Read their lifetime gross earnings (users/{uid}.totalEarnings).
+//   2. If they're at or over their current plan's lifetime cap AND there is
+//      a higher tier, attempt to auto-upgrade them. The next tier's monthly
+//      fee is deducted from totalEarnings (the platform pays itself out of
+//      the creator's accrued earnings instead of charging their card).
 //   3. If totalEarnings can't cover the fee, set paymentDue=true so the
 //      answer flow can block them while still letting fans send questions.
 //
-// Idempotent — running it twice in the same month doesn't double-charge,
-// because we stamp lastPlanFeeChargedAt and only deduct once per calendar month.
+// Idempotent — running it twice in the same calendar month doesn't double-
+// charge, because we stamp lastPlanFeeChargedAt.
 import { NextRequest, NextResponse } from "next/server";
 import { adminAuth, adminDb, FieldValue } from "@/lib/firebase-admin";
 import {
-  getMonthlyCapCents,
+  getLifetimeCapCents,
   PLAN_MONTHLY_FEE_CENTS,
   nextPlanTier,
 } from "@/lib/stripe";
 
 type ApiResult = {
   plan: string;
-  monthlyEarningsCents: number;
+  lifetimeEarningsCents: number;
   capCents: number;
   exceeded: boolean;
   upgradedTo?: string;
@@ -50,49 +50,32 @@ export async function POST(req: NextRequest) {
     const plan = (userData.platformPlan ?? "free") as string;
     const totalEarnings = (userData.totalEarnings ?? 0) as number;
 
-    // Compute the last-30-day gross earnings from the questions collection.
-    // We only count ANSWERED or PAID questions — pending ones haven't really
-    // earned anything because they could still refund.
-    const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-    const monthSnap = await adminDb
-      .collection("questions")
-      .where("creatorId", "==", uid)
-      .where("createdAt", ">=", since)
-      .get();
-
-    let monthlyEarningsCents = 0;
-    for (const d of monthSnap.docs) {
-      const data = d.data();
-      const status = (data.status ?? "").toString().toUpperCase();
-      if (status === "ANSWERED" || status === "PAID" || status === "PENDING") {
-        monthlyEarningsCents += Number(data.pricePaid ?? 0);
-      }
-    }
-
-    const capCents = getMonthlyCapCents(plan);
-    const exceeded = monthlyEarningsCents >= capCents;
-    const result: ApiResult = { plan, monthlyEarningsCents, capCents, exceeded };
+    const capCents = getLifetimeCapCents(plan);
+    const exceeded = totalEarnings >= capCents;
+    const result: ApiResult = {
+      plan,
+      lifetimeEarningsCents: totalEarnings,
+      capCents,
+      exceeded,
+    };
 
     if (!exceeded) {
-      // Below cap. Stamp the check timestamp and exit cleanly. If they were
-      // previously flagged but somehow earned less this month (refunds), we
-      // leave paymentDue alone — admin / billing portal clears it.
       await userRef.set({ lastPlanCapCheck: FieldValue.serverTimestamp() }, { merge: true });
       return NextResponse.json(result);
     }
 
-    // Over the cap. Try to bump them to the next tier.
+    // Over the lifetime cap. Try to bump them to the next tier.
     const nextTier = nextPlanTier(plan);
     if (!nextTier) {
       // Already on the top tier (pro) — caps shouldn't apply, but harmless.
       return NextResponse.json(result);
     }
 
-    // Don't re-charge if we already deducted the next-tier fee this month.
+    // Don't re-charge the same monthly fee twice in a calendar month.
     const lastCharged = (userData.lastPlanFeeChargedAt as any)?.toDate?.() as Date | undefined;
     if (lastCharged && sameCalendarMonth(lastCharged, new Date())) {
       result.alreadyChargedThisMonth = true;
-      result.upgradedTo = userData.platformPlan; // whatever we ended up on
+      result.upgradedTo = plan;
       return NextResponse.json(result);
     }
 

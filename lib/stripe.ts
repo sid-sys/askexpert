@@ -25,18 +25,19 @@ export function computeCreatorCut(amountCents: number, plan = "free"): number {
   return amountCents - computeApplicationFee(amountCents, plan);
 }
 
-// ── Monthly earning caps (cents) ─────────────────────────────────────────────
-// Free creators can earn up to $1k/mo before the cap kicks in. Creator plan
-// raises that to $10k/mo. Pro is uncapped. Crossing the cap triggers an
-// auto-upgrade attempt that's paid out of the creator's accrued earnings.
-export const PLAN_MONTHLY_CAP_CENTS: Record<string, number> = {
+// ── Lifetime earning caps (cents) ────────────────────────────────────────────
+// Free creators can earn up to $1k total before the cap kicks in. Creator
+// plan raises that to $10k lifetime. Pro is uncapped. Crossing the cap
+// triggers an auto-upgrade attempt that's paid out of the creator's accrued
+// earnings.
+export const PLAN_LIFETIME_CAP_CENTS: Record<string, number> = {
   free:    100_000,    // $1,000
   creator: 1_000_000,  // $10,000
   pro:     Number.POSITIVE_INFINITY,
 };
 
-export function getMonthlyCapCents(plan = "free"): number {
-  return PLAN_MONTHLY_CAP_CENTS[plan.toLowerCase()] ?? PLAN_MONTHLY_CAP_CENTS.free;
+export function getLifetimeCapCents(plan = "free"): number {
+  return PLAN_LIFETIME_CAP_CENTS[plan.toLowerCase()] ?? PLAN_LIFETIME_CAP_CENTS.free;
 }
 
 // Monthly subscription price for each paid plan, in cents. Used by the

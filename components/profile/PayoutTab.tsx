@@ -13,9 +13,9 @@ interface PayoutTabProps {
   feePercent: number;
   platformCutCents: number;
   creatorNetCents: number;
-  // ── Monthly cap / auto-upgrade state (null = not yet checked) ────────────
-  monthlyEarningsCents: number | null;
-  monthlyCapCents: number | null;
+  // ── Lifetime cap / auto-upgrade state (null = not yet checked) ───────────
+  lifetimeEarningsCents: number | null;
+  lifetimeCapCents: number | null;
   exceededCap: boolean;
   upgradedTo?: string;
   paymentDue: boolean;
@@ -80,7 +80,7 @@ function chipStyle(active: boolean, color: "purple" | "green" | "orange"): React
 export default function PayoutTab({
   platformPlan, totalEarnings, pendingBalance, payoutUnlocked, earningsFormatted, progressPct,
   feePercent, platformCutCents, creatorNetCents,
-  monthlyEarningsCents, monthlyCapCents, exceededCap, upgradedTo,
+  lifetimeEarningsCents, lifetimeCapCents, exceededCap, upgradedTo,
   paymentDue, paymentDueCents,
   handleManagePlan, portalLoading, userProfile, handlePayoutSetup, stripeLoading,
   payoutMethod, setPayoutMethod, accountHolder, setAccountHolder, bankName, setBankName,
@@ -88,10 +88,10 @@ export default function PayoutTab({
   swiftCode, setSwiftCode, paypalEmail, setPaypalEmail, wiseEmail, setWiseEmail
 }: PayoutTabProps) {
   const planLabel = platformPlan === "pro" ? "Pro" : platformPlan === "creator" ? "Creator" : "Free";
-  const monthlyPct = monthlyEarningsCents != null && monthlyCapCents != null && isFinite(monthlyCapCents)
-    ? Math.min(100, (monthlyEarningsCents / monthlyCapCents) * 100)
+  const lifetimePct = lifetimeEarningsCents != null && lifetimeCapCents != null && isFinite(lifetimeCapCents)
+    ? Math.min(100, (lifetimeEarningsCents / lifetimeCapCents) * 100)
     : 0;
-  const monthlyOver80 = monthlyPct >= 80;
+  const lifetimeOver80 = lifetimePct >= 80;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 32 }}>
@@ -111,7 +111,7 @@ export default function PayoutTab({
               Plan fee unpaid — replies are paused
             </div>
             <div style={{ color: "#7f1d1d", fontSize: "0.88rem", lineHeight: 1.55 }}>
-              You exceeded your <strong>{planLabel}</strong> plan's monthly earning cap, so we
+              You exceeded your <strong>{planLabel}</strong> plan's lifetime earning cap, so we
               tried to bump you to the next tier from your accrued earnings.
               You're short by <strong>{formatCents(paymentDueCents)}</strong>. Until this is
               settled, you can't reply to new questions, but fans can still ask.
@@ -139,7 +139,7 @@ export default function PayoutTab({
               Auto-upgraded to {upgradedTo === "pro" ? "Pro" : "Creator"}
             </div>
             <div style={{ color: "#065f46", fontSize: "0.85rem", lineHeight: 1.5, marginTop: 2 }}>
-              You hit your monthly cap so we moved you to the next tier and
+              You hit your lifetime cap so we moved you to the next tier and
               deducted the subscription fee from your accrued earnings.
             </div>
           </div>
@@ -172,42 +172,42 @@ export default function PayoutTab({
         </div>
       </div>
 
-      {/* MONTHLY CAP — last 30 days vs current plan limit */}
-      {monthlyEarningsCents != null && monthlyCapCents != null && (
-        <div className="card-brutal" style={{ borderColor: exceededCap ? "#fca5a5" : monthlyOver80 ? "#fbbf24" : "var(--border)" }}>
+      {/* LIFETIME CAP — total earnings vs current plan limit */}
+      {lifetimeEarningsCents != null && lifetimeCapCents != null && (
+        <div className="card-brutal" style={{ borderColor: exceededCap ? "#fca5a5" : lifetimeOver80 ? "#fbbf24" : "var(--border)" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 10 }}>
-            <div style={{ background: "var(--bg-soft)", color: "var(--text-dark)", width: 40, height: 40, borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.2rem", border: "2px solid var(--border)" }}>📅</div>
-            <h2 className="font-display" style={{ fontSize: "1.4rem", color: "var(--text-dark)", margin: 0 }}>This Month</h2>
+            <div style={{ background: "var(--bg-soft)", color: "var(--text-dark)", width: 40, height: 40, borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.2rem", border: "2px solid var(--border)" }}>📈</div>
+            <h2 className="font-display" style={{ fontSize: "1.4rem", color: "var(--text-dark)", margin: 0 }}>Plan Cap</h2>
           </div>
           <p style={{ color: "var(--text-muted)", fontSize: "0.88rem", marginBottom: 14 }}>
-            Earnings in the last 30 days against your {planLabel} plan's monthly cap.
-            {isFinite(monthlyCapCents) ? null : <> Pro plan is uncapped.</>}
+            Lifetime earnings against your {planLabel} plan's cap.
+            {isFinite(lifetimeCapCents) ? null : <> Pro plan is uncapped.</>}
           </p>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
             <span style={{ fontFamily: "var(--font-main)", fontWeight: 900, fontSize: "1.4rem", color: exceededCap ? "#b91c1c" : "var(--text-dark)" }}>
-              {formatCents(monthlyEarningsCents)}
+              {formatCents(lifetimeEarningsCents)}
             </span>
             <span style={{ color: "var(--text-muted)", fontSize: "0.85rem", fontWeight: 600 }}>
-              of {isFinite(monthlyCapCents) ? formatCents(monthlyCapCents) : "∞"} cap
+              of {isFinite(lifetimeCapCents) ? formatCents(lifetimeCapCents) : "∞"} cap
             </span>
           </div>
-          {isFinite(monthlyCapCents) && (
+          {isFinite(lifetimeCapCents) && (
             <div style={{ height: 12, background: "#f3f4f6", borderRadius: 99, overflow: "hidden" }}>
               <div style={{
-                height: "100%", width: `${monthlyPct}%`,
-                background: exceededCap ? "#b91c1c" : monthlyOver80 ? "#f59e0b" : "var(--purple)",
+                height: "100%", width: `${lifetimePct}%`,
+                background: exceededCap ? "#b91c1c" : lifetimeOver80 ? "#f59e0b" : "var(--purple)",
                 transition: "width 0.6s cubic-bezier(0.4,0,0.2,1)",
               }} />
             </div>
           )}
           {exceededCap && !paymentDue && upgradedTo && upgradedTo !== platformPlan && (
             <p style={{ color: "#065f46", fontSize: "0.85rem", marginTop: 10, fontWeight: 600 }}>
-              ✅ Cap exceeded — we already moved you to the {upgradedTo} tier.
+              ✅ Cap reached — we already moved you to the {upgradedTo} tier.
             </p>
           )}
-          {monthlyOver80 && !exceededCap && (
+          {lifetimeOver80 && !exceededCap && (
             <p style={{ color: "#92400e", fontSize: "0.85rem", marginTop: 10, fontWeight: 600 }}>
-              ⚠️ You're approaching your monthly cap. Upgrade now to avoid an auto-upgrade fee later.
+              ⚠️ You're approaching your plan's lifetime cap. Upgrade now to avoid an auto-upgrade fee later.
             </p>
           )}
         </div>

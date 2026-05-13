@@ -197,7 +197,7 @@ export default function UpgradePage() {
             {
               plan: "free" as const, label: "Free", price: "$0", period: "forever",
               fee: "15%", feeLabel: "per transaction", accent: "var(--text-muted)", accentBg: "#f3f4f6",
-              perks: ["Public creator profile", "Unlimited questions", "Pay-per-question & monthly sub", "Up to $1,000/mo earnings"],
+              perks: ["Public creator profile", "Unlimited questions", "Pay-per-question & monthly sub", "Up to $1,000 lifetime earnings"],
             },
             {
               // Explicit rgba on the badge background so it's reliably light
@@ -205,7 +205,7 @@ export default function UpgradePage() {
               // and swallowing the purple text on top of it).
               plan: "creator" as const, label: "Creator", price: "$4.99", period: "per month",
               fee: "5%", feeLabel: "per transaction", accent: "#7c3aed", accentBg: "rgba(124,58,237,0.12)",
-              perks: ["Everything in Free", "Custom profile branding", "Priority support", "Up to $10,000/mo earnings"],
+              perks: ["Everything in Free", "Custom profile branding", "Priority support", "Up to $10,000 lifetime earnings"],
             },
             {
               plan: "pro" as const, label: "Pro", price: "$9.99", period: "per month",

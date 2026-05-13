@@ -122,11 +122,13 @@ export default function Sidebar() {
     item: (active: boolean, isAdmin = false): React.CSSProperties => ({
       display: "flex", flexDirection: "row", alignItems: "center",
       justifyContent: isCollapsed ? "center" : "flex-start",
-      gap: 10, padding: isCollapsed ? "10px 0" : "7px 12px", borderRadius: 9,
+      gap: 10, padding: isCollapsed ? "10px 0" : "8px 12px", borderRadius: 9,
       color: active ? "#ffffff" : isAdmin ? "rgba(245,158,11,0.7)" : "rgba(161,161,170,0.8)",
       textDecoration: "none",
       fontFamily: "'Outfit',sans-serif", fontWeight: active ? 700 : 500,
-      fontSize: "0.82rem", lineHeight: 1,
+      // 12px / 0.75rem — kept in sync with the fan-dashboard sidebar so
+      // creator and fan side-nav items look identical.
+      fontSize: "12px", lineHeight: 1.1,
       background: active ? "#f59e0b" : "transparent",
       border: "1px solid transparent",
       width: "100%", textAlign: "left" as const,

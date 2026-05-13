@@ -178,6 +178,18 @@ export default function BottomNav() {
                     <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: "0.72rem", color: "rgba(167,139,250,0.7)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>@{userProfile.username}</span>
                   )}
                   {(() => {
+                    // On the fan side we always show a yellow FAN chip (the
+                    // creator's platform plan isn't relevant while browsing
+                    // as a fan). On the creator side we show the plan tier.
+                    if (isFanView) {
+                      return (
+                        <span style={{
+                          fontFamily: "'Outfit',sans-serif", fontWeight: 800, fontSize: "0.55rem",
+                          letterSpacing: "0.08em", padding: "1px 5px", borderRadius: 5,
+                          background: "rgba(245,158,11,0.22)", color: "#fbbf24", flexShrink: 0,
+                        }}>FAN</span>
+                      );
+                    }
                     const planKey = ((userProfile as any)?.platformPlan ?? "free") as "free" | "creator" | "pro";
                     const meta = {
                       free:    { label: "FREE",    bg: "rgba(161,161,170,0.22)", fg: "#d4d4d8" },
@@ -430,7 +442,10 @@ export default function BottomNav() {
            every <button>, which blows out our tight bottom-nav cells. */
         .mobile-bottom-nav .bnav-cell {
           padding: 6px 4px !important;
-          font-size: 0.6rem !important;
+          /* Bottom-nav labels are intentionally smaller than side-nav items
+             — at full 12px the labels overflow on narrow phones. 0.65rem
+             (~10px) keeps them legible without horizontal scroll. */
+          font-size: 0.65rem !important;
           font-weight: 500 !important;
           border-radius: 10px !important;
           line-height: 1 !important;

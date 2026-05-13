@@ -210,16 +210,18 @@ export default function FanDashboardPage() {
 
   const sidebarNav = (
     <nav style={{ flex: 1, padding: "10px", display: "flex", flexDirection: "column", gap: 2, overflowY: "auto" }}>
-      <p style={{ fontFamily: "'Outfit',sans-serif", fontSize: "0.58rem", fontWeight: 800, letterSpacing: "0.18em", color: "rgba(167,139,250,0.45)", textTransform: "uppercase", margin: "14px 0 4px 8px" }}>FAN</p>
+      {/* Section label kept identical (color + size) to the creator sidebar
+          for consistent visual weight across both side-nav surfaces. */}
+      <p style={{ fontFamily: "'Outfit',sans-serif", fontSize: "0.58rem", fontWeight: 800, letterSpacing: "0.18em", color: "#f59e0b", textTransform: "uppercase", margin: "14px 0 4px 8px" }}>FAN</p>
       {NAV.map((item) => {
         const active = activeNav === item.id;
         return (
-          <button key={item.id} onClick={() => go(item.id)} style={{
+          <button key={item.id} onClick={() => go(item.id)} className="fan-sidebar-item" style={{
             display: "flex", alignItems: "center", gap: 10,
-            padding: "9px 12px", borderRadius: 9, border: "none", width: "100%", textAlign: "left",
+            borderRadius: 9, border: "none", width: "100%", textAlign: "left",
             background: active ? "#f59e0b" : "transparent",
             color: active ? "#fff" : "rgba(161,161,170,0.8)",
-            fontFamily: "'Outfit',sans-serif", fontWeight: active ? 700 : 500, fontSize: "0.88rem",
+            fontFamily: "'Outfit',sans-serif", fontWeight: active ? 700 : 500,
             cursor: "pointer", transition: "all 0.18s", marginBottom: 2,
           }}>
             <span style={{ width: 20, height: 20, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{item.icon}</span>
@@ -271,6 +273,15 @@ export default function FanDashboardPage() {
         <div style={{ minWidth: 0, flex: 1 }}>
           <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: "0.8rem", fontWeight: 700, color: "#e4e4e7", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 130 }}>{displayName}</div>
           {username && <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: "0.65rem", color: "rgba(167,139,250,0.55)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 130 }}>@{username}</div>}
+          {/* Yellow FAN chip — visual parity with the creator sidebar's plan
+              badge (FREE/CREATOR/PRO). Tells the user which side they're
+              currently viewing. */}
+          <span style={{
+            display: "inline-flex", alignItems: "center",
+            fontFamily: "'Outfit',sans-serif", fontWeight: 800, fontSize: "0.6rem",
+            letterSpacing: "0.08em", padding: "2px 6px", borderRadius: 6,
+            background: "rgba(245,158,11,0.18)", color: "#fbbf24", marginTop: 4,
+          }}>FAN</span>
         </div>
       </button>
       <button onClick={handleLogout} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", borderRadius: 9, border: "1px solid rgba(255,255,255,0.05)", background: "transparent", color: "rgba(161,161,170,0.55)", fontFamily: "'Outfit',sans-serif", fontSize: "0.82rem", fontWeight: 500, cursor: "pointer", width: "100%", textAlign: "left", transition: "all 0.18s" }}
@@ -344,6 +355,19 @@ export default function FanDashboardPage() {
         @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&display=swap');
         .fan-root * { box-sizing: border-box; margin: 0; padding: 0; }
         .fan-sidebar { width: 232px; min-width: 232px; height: 100vh; background: #0a0a0a; border-right: 1px solid rgba(167,139,250,0.10); display: flex; flex-direction: column; position: fixed; top: 0; left: 0; z-index: 200; transition: transform 0.3s cubic-bezier(0.4,0,0.2,1); }
+        /* Beat the universal-button rule in globals.css so the fan-side
+           sidebar nav items match the creator sidebar (8px 12px padding,
+           12px font, normal weight). */
+        button.fan-sidebar-item {
+          padding: 8px 12px !important;
+          font-size: 12px !important;
+          font-weight: 500 !important;
+          line-height: 1.1 !important;
+          border-radius: 9px !important;
+        }
+        button.fan-sidebar-item.active {
+          font-weight: 700 !important;
+        }
         .fan-main { margin-left: 232px; min-height: 100vh; background: #f7f7f8; display: flex; flex-direction: column; }
         .fan-topbar { background: #fff; border-bottom: 1px solid #f0f0f0; height: 60px; padding: 0 28px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 100; }
         .fan-content { padding: 40px 24px; }
