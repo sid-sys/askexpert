@@ -612,11 +612,6 @@ export default function QuestionCard({ question, onAnswered }: QuestionCardProps
                   </div>
                 ))}
               </div>
-              <div style={{ width: "100%", fontSize: "0.75rem", color: "#f59e0b", fontWeight: 600, marginTop: 4 }}>
-                ⏳ Note: All attached files are automatically deleted after 1 week.
-              </div>
-
-
               {/* Voice note chip with <audio> preview */}
               {voiceBlob && voiceUrl && (
                 <div style={{

@@ -254,9 +254,6 @@ export default function RichComposer({
               </button>
             </div>
           ))}
-          <div style={{ width: "100%", fontSize: "0.75rem", color: "var(--orange)", fontWeight: 600, marginTop: 4 }}>
-            ⏳ Note: All attached files are automatically deleted after 1 week.
-          </div>
         </div>
       )}
 

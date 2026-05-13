@@ -129,7 +129,7 @@ export async function GET(req: NextRequest) {
         console.log(`🔄 Fallback Sync: Processing question ${meta.questionId} (exists: ${qSnap.exists})`);
         
         const {
-          questionId, creatorId, creatorName, followerEmail,
+          questionId, creatorId, creatorName, followerEmail, followerUid,
           content, pricePaid, expiresAt,
           payoutMethod, feePercent, currency,
         } = meta as Record<string, string>;
@@ -149,6 +149,7 @@ export async function GET(req: NextRequest) {
             status:                "PENDING",
             pricePaid:             parseInt(pricePaid),
             followerEmail,
+            followerUid:           followerUid || null,
             creatorId,
             stripePaymentIntentId: session.payment_intent || session.subscription || "",
             stripeChargeId:        null,

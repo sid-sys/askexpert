@@ -227,6 +227,7 @@ export async function POST(req: NextRequest) {
     try {
       const {
         questionId, creatorId, creatorName, followerEmail, followerName,
+        followerUid,
         content, pricePaid, expiresAt,
         payoutMethod, platformPlan, feePercent, creatorCut, currency,
       } = meta as Record<string, string>;
@@ -277,6 +278,11 @@ export async function POST(req: NextRequest) {
         pricePaid:             parseInt(pricePaid),
         followerEmail,
         followerName,
+        // The fan's uid so the fan's /fan-dashboard "My Questions" tab
+        // (which queries `where("followerUid", "==", user.uid)`) actually
+        // returns the question they just paid for. Without this, paid
+        // one-time questions never appear on the fan side.
+        followerUid:           followerUid || null,
         creatorId,
         creatorName:           creatorName || creatorData.displayName || "The Creator",
         responseTimeHours:     actualResponseTime,

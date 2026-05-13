@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { useRouter, useSearchParams } from "next/navigation";
-import { collection, query, where, getDocs } from "firebase/firestore";
+import { collection, query, where, getDocs, onSnapshot } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { COLLECTIONS } from "@/lib/types";
 import Swal from "sweetalert2";
@@ -159,46 +159,92 @@ export default function FanDashboardPage() {
     if (user === null) router.push("/auth?redirect=/fan-dashboard");
   }, [user, router]);
 
+  // Live subscriptions + questions for this fan. onSnapshot keeps both lists
+  // in sync immediately when a new subscription or paid question is created
+  // (was getDocs — required a manual refresh after subscribing).
   useEffect(() => {
     if (!user) return;
-    const run = async () => {
-      setLoading(true);
-      try {
-        const subSnap = await getDocs(
-          query(collection(db, COLLECTIONS.SUBSCRIPTIONS), where("followerId", "==", user.uid), where("status", "==", "active"))
-        );
-        const raw = subSnap.docs.map((d) => ({ id: d.id, ...d.data() } as Subscription));
-        const enriched = await Promise.all(raw.map(async (sub) => {
-          try {
-            const snap = await getDocs(query(collection(db, COLLECTIONS.USERS), where("uid", "==", sub.creatorId)));
-            if (!snap.empty) {
-              const cd = snap.docs[0].data();
-              return { ...sub, creatorUsername: cd.username, creatorName: cd.displayName };
-            }
-          } catch { /* ignore */ }
-          return sub;
-        }));
-        setSubscriptions(enriched);
+    setLoading(true);
 
-        const qSnap = await getDocs(query(collection(db, COLLECTIONS.QUESTIONS), where("followerUid", "==", user.uid)));
-        const creatorIds = [...new Set(qSnap.docs.map((d) => d.data().creatorId).filter(Boolean))];
-        const cm: Record<string, string> = {};
-        await Promise.all(creatorIds.map(async (cid) => {
-          try {
-            const snap = await getDocs(query(collection(db, COLLECTIONS.USERS), where("uid", "==", cid)));
-            if (!snap.empty) cm[cid] = snap.docs[0].data().username;
-          } catch { /* ignore */ }
-        }));
-        setQuestions(
-          qSnap.docs.map((d) => {
-            const data = d.data();
-            return { id: d.id, content: data.content || "", status: data.status || "PENDING", response: data.response || "", createdAt: data.createdAt?.toDate?.() ?? new Date(), creatorId: data.creatorId || "", creatorUsername: cm[data.creatorId] || "" } as Question;
-          }).sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
-        );
-      } catch (err) { console.error("Fan dashboard:", err); }
-      finally { setLoading(false); }
+    let cancelled = false;
+    const creatorMetaCache = new Map<string, { username?: string; displayName?: string }>();
+
+    const enrichWithCreator = async (raw: Subscription[]): Promise<Subscription[]> => {
+      const missing = raw
+        .map((s) => s.creatorId)
+        .filter((cid) => cid && !creatorMetaCache.has(cid));
+      for (const cid of missing) {
+        try {
+          const snap = await getDocs(query(collection(db, COLLECTIONS.USERS), where("uid", "==", cid)));
+          if (!snap.empty) {
+            const cd = snap.docs[0].data();
+            creatorMetaCache.set(cid, { username: cd.username, displayName: cd.displayName });
+          } else {
+            creatorMetaCache.set(cid, {});
+          }
+        } catch { creatorMetaCache.set(cid, {}); }
+      }
+      return raw.map((s) => {
+        const meta = creatorMetaCache.get(s.creatorId) ?? {};
+        return { ...s, creatorUsername: meta.username, creatorName: meta.displayName };
+      });
     };
-    run();
+
+    const subsUnsub = onSnapshot(
+      query(
+        collection(db, COLLECTIONS.SUBSCRIPTIONS),
+        where("followerId", "==", user.uid),
+        where("status", "==", "active"),
+      ),
+      async (snap) => {
+        const raw = snap.docs.map((d) => ({ id: d.id, ...d.data() } as Subscription));
+        const enriched = await enrichWithCreator(raw);
+        if (!cancelled) setSubscriptions(enriched);
+      },
+      (err) => console.error("Fan dashboard (subs):", err),
+    );
+
+    const qsUnsub = onSnapshot(
+      query(collection(db, COLLECTIONS.QUESTIONS), where("followerUid", "==", user.uid)),
+      async (snap) => {
+        const raw = snap.docs.map((d) => {
+          const data = d.data();
+          return {
+            id: d.id,
+            content: data.content || "",
+            status: data.status || "PENDING",
+            response: data.response || "",
+            createdAt: data.createdAt?.toDate?.() ?? new Date(),
+            creatorId: data.creatorId || "",
+            creatorUsername: "",
+          } as Question;
+        });
+        // Resolve creator usernames using the same cache.
+        for (const q of raw) {
+          if (q.creatorId && !creatorMetaCache.has(q.creatorId)) {
+            try {
+              const u = await getDocs(query(collection(db, COLLECTIONS.USERS), where("uid", "==", q.creatorId)));
+              if (!u.empty) {
+                const cd = u.docs[0].data();
+                creatorMetaCache.set(q.creatorId, { username: cd.username, displayName: cd.displayName });
+              } else { creatorMetaCache.set(q.creatorId, {}); }
+            } catch { creatorMetaCache.set(q.creatorId, {}); }
+          }
+          q.creatorUsername = creatorMetaCache.get(q.creatorId)?.username ?? "";
+        }
+        if (!cancelled) {
+          setQuestions(raw.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()));
+          setLoading(false);
+        }
+      },
+      (err) => { console.error("Fan dashboard (questions):", err); if (!cancelled) setLoading(false); },
+    );
+
+    return () => {
+      cancelled = true;
+      subsUnsub();
+      qsUnsub();
+    };
   }, [user]);
 
   const go = (nav: NavId) => {
