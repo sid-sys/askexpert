@@ -578,7 +578,7 @@ export default function ChatThread({
                 const isAudio = pf.file.type.startsWith("audio/");
                 const isVideo = pf.file.type.startsWith("video/");
                 return (
-                  <div key={pf.id} style={{ position: "relative", background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, overflow: "hidden", padding: 6, display: "flex", alignItems: "center", gap: 8, maxWidth: 240 }}>
+                  <div key={pf.id} style={{ position: "relative", background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 6, paddingRight: 32, display: "flex", alignItems: "center", gap: 8, maxWidth: 240 }}>
                     {isImage ? (
                       <img src={pf.previewUrl} alt={pf.file.name} style={{ width: 56, height: 56, objectFit: "cover", borderRadius: 8, flexShrink: 0 }} />
                     ) : isVideo ? (
@@ -601,7 +601,8 @@ export default function ChatThread({
                       onClick={() => removePendingFile(pf.id)}
                       aria-label="Remove attachment"
                       title="Remove"
-                      style={{ position: "absolute", top: -6, right: -6, width: 22, height: 22, borderRadius: "50%", border: "none", background: "#1f2937", color: "#fff", cursor: "pointer", fontSize: "0.7rem", fontWeight: 800, boxShadow: "0 0 0 2px #fff" }}
+                      className="chat-pending-close"
+                      style={{ position: "absolute", top: "50%", right: 6, transform: "translateY(-50%)", width: 22, height: 22, borderRadius: "50%", border: "none", background: "#1f2937", color: "#fff", cursor: "pointer", fontSize: "0.7rem", fontWeight: 800, padding: 0, display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 1 }}
                     >✕</button>
                   </div>
                 );
@@ -656,7 +657,8 @@ export default function ChatThread({
                   onClick={discardPendingVoice}
                   aria-label="Discard voice note"
                   title="Discard"
-                  style={{ width: 26, height: 26, borderRadius: "50%", border: "none", background: "#1f2937", color: "#fff", cursor: "pointer", fontSize: "0.74rem", fontWeight: 800, flexShrink: 0 }}
+                  className="chat-pending-close"
+                  style={{ width: 26, height: 26, borderRadius: "50%", border: "none", background: "#1f2937", color: "#fff", cursor: "pointer", fontSize: "0.74rem", fontWeight: 800, flexShrink: 0, padding: 0, display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 1 }}
                 >✕</button>
               </div>
             ) : (
@@ -715,6 +717,13 @@ export default function ChatThread({
           border-radius: 99px !important;
           font-size: 0.85rem !important;
           font-weight: 800 !important;
+        }
+        button.chat-pending-close {
+          padding: 0 !important;
+          border-radius: 50% !important;
+          font-size: 0.7rem !important;
+          font-weight: 800 !important;
+          line-height: 1 !important;
         }
         .chat-input-row {
           box-sizing: border-box;
