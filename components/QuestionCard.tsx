@@ -499,24 +499,37 @@ export default function QuestionCard({ question, onAnswered }: QuestionCardProps
           onDragOver={handleDragOver}
           onDrop={handleDrop}
         >
-          {/* Tiny close button — top-right of the composer area */}
-          <button
-            type="button"
-            onClick={() => setShowForm(false)}
-            aria-label="Close composer"
-            title="Discard and close"
-            style={{
-              position: "absolute", top: -4, right: 0, zIndex: 10,
-              width: 26, height: 26, borderRadius: "50%",
-              border: "1px solid #e5e7eb", background: "#fff",
-              color: "#9ca3af", cursor: "pointer",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              fontSize: "0.85rem", lineHeight: 1, fontWeight: 600,
-              transition: "all 0.15s",
-            }}
-            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = "#f3f4f6"; (e.currentTarget as HTMLElement).style.color = "#374151"; }}
-            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = "#fff"; (e.currentTarget as HTMLElement).style.color = "#9ca3af"; }}
-          >✕</button>
+          {/* Small "Reply" header row with a close × on the right. Keeps the
+              close button clear of the input bar's mic/send slot below so
+              there's no overlap on narrow viewports. */}
+          <div style={{
+            display: "flex", alignItems: "center", justifyContent: "space-between",
+            marginBottom: 8, paddingRight: 2,
+          }}>
+            <span style={{
+              fontFamily: "'Outfit',sans-serif", fontSize: "0.72rem",
+              fontWeight: 700, color: "#7c3aed", textTransform: "uppercase",
+              letterSpacing: "0.08em",
+            }}>Your reply</span>
+            <button
+              type="button"
+              onClick={() => setShowForm(false)}
+              aria-label="Close composer"
+              title="Discard and close"
+              className="qc-composer-close"
+              style={{
+                width: 26, height: 26, borderRadius: "50%",
+                border: "1px solid #e5e7eb", background: "#fff",
+                color: "#9ca3af", cursor: "pointer",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                fontSize: "0.85rem", lineHeight: 1, fontWeight: 600,
+                padding: 0, flexShrink: 0,
+                transition: "all 0.15s",
+              }}
+              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = "#f3f4f6"; (e.currentTarget as HTMLElement).style.color = "#374151"; }}
+              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = "#fff"; (e.currentTarget as HTMLElement).style.color = "#9ca3af"; }}
+            >✕</button>
+          </div>
 
           {/* ── Drag overlay ── */}
           {dragging && (
@@ -639,10 +652,11 @@ export default function QuestionCard({ question, onAnswered }: QuestionCardProps
           )}
 
           {/* ═══ CHAT INPUT BAR ═══ */}
-          <div style={{
-            display: "flex", alignItems: "flex-end", gap: 8,
+          <div className="qc-input-bar" style={{
+            display: "flex", alignItems: "center", gap: 4,
             background: "#f9fafb", borderRadius: 28, border: "1.5px solid #e5e7eb",
-            padding: "6px",
+            padding: "4px",
+            minWidth: 0,
           }}>
 
             {/* ── + Button (attachment menu) ── */}
@@ -651,6 +665,8 @@ export default function QuestionCard({ question, onAnswered }: QuestionCardProps
                 type="button"
                 onClick={() => setShowAttachMenu(!showAttachMenu)}
                 disabled={isRecording}
+                aria-label={showAttachMenu ? "Close attach menu" : "Attach file"}
+                className="qc-icon-btn"
                 style={{
                   width: 40, height: 40, borderRadius: "50%",
                   background: showAttachMenu ? "#7c3aed" : "#e5e7eb",
@@ -659,6 +675,7 @@ export default function QuestionCard({ question, onAnswered }: QuestionCardProps
                   display: "flex", alignItems: "center", justifyContent: "center",
                   fontSize: "1.3rem", fontWeight: 800, transition: "all 0.2s",
                   transform: showAttachMenu ? "rotate(45deg)" : "none",
+                  flexShrink: 0, padding: 0, lineHeight: 1,
                 }}
               >+</button>
 
@@ -695,7 +712,7 @@ export default function QuestionCard({ question, onAnswered }: QuestionCardProps
             </div>
 
             {/* ── Text input (auto-resizing, max 220px) ── */}
-            <div style={{ flex: 1, position: "relative" }}>
+            <div style={{ flex: 1, minWidth: 0, position: "relative", display: "flex" }}>
               <textarea
                 ref={textareaRef}
                 value={responseText}
@@ -704,15 +721,16 @@ export default function QuestionCard({ question, onAnswered }: QuestionCardProps
                     setResponseText(e.target.value);
                   }
                 }}
-                placeholder="Type a message..."
+                placeholder="Reply…"
                 disabled={isRecording}
                 rows={1}
                 style={{
                   width: "100%", border: "none", background: "transparent",
-                  padding: "10px 4px", fontSize: "0.93rem", lineHeight: 1.5,
+                  padding: "10px 8px", fontSize: "0.93rem", lineHeight: 1.4,
                   resize: "none", outline: "none", fontFamily: "inherit",
                   minHeight: 40, maxHeight: 220, overflowY: "hidden",
                   boxSizing: "border-box",
+                  alignSelf: "center",
                 }}
               />
 
@@ -735,6 +753,8 @@ export default function QuestionCard({ question, onAnswered }: QuestionCardProps
                 type="button"
                 onClick={handleSubmit}
                 disabled={submitting}
+                aria-label="Send reply"
+                className="qc-icon-btn"
                 style={{
                   width: 40, height: 40, borderRadius: "50%",
                   background: "linear-gradient(135deg, #7c3aed, #a855f7)",
@@ -742,6 +762,7 @@ export default function QuestionCard({ question, onAnswered }: QuestionCardProps
                   display: "flex", alignItems: "center", justifyContent: "center",
                   fontSize: "1.1rem", transition: "all 0.2s", flexShrink: 0,
                   opacity: submitting ? 0.6 : 1,
+                  padding: 0, lineHeight: 1,
                 }}
               >
                 {submitting ? "…" : "➤"}
@@ -750,6 +771,8 @@ export default function QuestionCard({ question, onAnswered }: QuestionCardProps
               <button
                 type="button"
                 onClick={isRecording ? stopRecording : startRecording}
+                aria-label={isRecording ? "Stop recording" : "Record voice note"}
+                className="qc-icon-btn"
                 style={{
                   width: 40, height: 40, borderRadius: "50%",
                   background: isRecording ? "#ef4444" : "#e5e7eb",
@@ -757,6 +780,7 @@ export default function QuestionCard({ question, onAnswered }: QuestionCardProps
                   border: "none", cursor: "pointer",
                   display: "flex", alignItems: "center", justifyContent: "center",
                   fontSize: "1.1rem", transition: "all 0.2s", flexShrink: 0,
+                  padding: 0, lineHeight: 1,
                 }}
               >
                 🎙️
@@ -808,6 +832,24 @@ export default function QuestionCard({ question, onAnswered }: QuestionCardProps
           50% { opacity: 0.4; }
         }
         .swal-rounded { border-radius: 20px !important; }
+        /* Beat the universal button rule in globals.css (forces padding
+           6px 14px + border-radius 8px + font-size 0.75rem on every <button>).
+           Without these the composer +/mic/send buttons get inflated into
+           rounded pills and the input row stops aligning. */
+        button.qc-icon-btn {
+          padding: 0 !important;
+          border-radius: 50% !important;
+          font-size: 1.1rem !important;
+          font-weight: 800 !important;
+          line-height: 1 !important;
+        }
+        button.qc-composer-close {
+          padding: 0 !important;
+          border-radius: 50% !important;
+          font-size: 0.85rem !important;
+          font-weight: 600 !important;
+          line-height: 1 !important;
+        }
       `}</style>
     </div>
   );
