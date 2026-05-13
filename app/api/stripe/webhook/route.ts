@@ -451,16 +451,24 @@ export async function POST(req: NextRequest) {
     const status        = sub.status;
 
     if (status === "active" || status === "trialing") {
+      // Also mirror the "scheduled cancellation" state so the /upgrade UI
+      // can label the current-plan button as "Cancels on <date>" when the
+      // creator hits Cancel in Stripe's Billing Portal.
+      const cancelAtPeriodEnd = !!sub.cancel_at_period_end;
+      const cpe = (sub as any).current_period_end as number | undefined;
+      const planCurrentPeriodEnd = (typeof cpe === "number" && cpe > 0) ? new Date(cpe * 1000) : null;
       await adminDb.collection("users").doc(uid).set(
         {
           platformPlan:            plan,
           platformPlanStripeSubId: sub.id,
           stripeCustomerId:        typeof sub.customer === "string" ? sub.customer : sub.customer.id,
+          planCancelAtPeriodEnd:   cancelAtPeriodEnd,
+          planCurrentPeriodEnd:    planCurrentPeriodEnd,
           updatedAt:               FieldValue.serverTimestamp(),
         },
         { merge: true }
       );
-      console.log(`🚀 Creator ${uid} upgraded to plan: ${plan}`);
+      console.log(`🚀 Creator ${uid} on plan ${plan}${cancelAtPeriodEnd ? " (cancelling at period end)" : ""}`);
     }
   }
 
@@ -477,6 +485,8 @@ export async function POST(req: NextRequest) {
         {
           platformPlan: "free",
           platformPlanStripeSubId: null,
+          planCancelAtPeriodEnd: false,
+          planCurrentPeriodEnd: null,
           updatedAt: FieldValue.serverTimestamp()
         },
         { merge: true }

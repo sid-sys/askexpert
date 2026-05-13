@@ -107,11 +107,17 @@ export async function POST(req: NextRequest) {
 
     let plan: "free" | "creator" | "pro" = "free";
     let activeSubId: string | null = null;
+    let cancelAtPeriodEnd = false;
+    let currentPeriodEndMs: number | null = null;
     if (keeper) {
       const resolved = resolvePlanFromSub(keeper);
       if (resolved) {
         plan = resolved;
         activeSubId = keeper.id;
+        cancelAtPeriodEnd = !!keeper.cancel_at_period_end;
+        // current_period_end is a Unix-seconds timestamp; convert to ms.
+        const cpe = (keeper as any).current_period_end as number | undefined;
+        if (typeof cpe === "number" && cpe > 0) currentPeriodEndMs = cpe * 1000;
       }
     }
 
@@ -120,6 +126,8 @@ export async function POST(req: NextRequest) {
         platformPlan: plan,
         platformPlanStripeSubId: activeSubId,
         stripeCustomerId: customerId,
+        planCancelAtPeriodEnd: cancelAtPeriodEnd,
+        planCurrentPeriodEnd: currentPeriodEndMs ? new Date(currentPeriodEndMs) : null,
         updatedAt: FieldValue.serverTimestamp(),
       },
       { merge: true },
@@ -130,6 +138,8 @@ export async function POST(req: NextRequest) {
       subId: activeSubId,
       source: "stripe",
       cancelledDuplicates,
+      cancelAtPeriodEnd,
+      currentPeriodEnd: currentPeriodEndMs,
     });
   } catch (err: any) {
     console.error("[sync-plan] error:", err);

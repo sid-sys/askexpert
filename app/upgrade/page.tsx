@@ -89,6 +89,23 @@ export default function UpgradePage() {
   if (loading || !user) return <div style={{ padding: 40, color: "white" }}>Loading...</div>;
 
   const platformPlan = (userProfile as any)?.platformPlan ?? "free";
+  // Mirror the "scheduled cancellation" state from Stripe so the
+  // current-plan card can say "Cancels on <date>" instead of just
+  // "Manage Billing →". The fields are populated by both /api/stripe/
+  // sync-plan and the customer.subscription.{updated,deleted} webhook.
+  const planCancelAtPeriodEnd = !!(userProfile as any)?.planCancelAtPeriodEnd;
+  const planCurrentPeriodEndRaw = (userProfile as any)?.planCurrentPeriodEnd;
+  const planCurrentPeriodEnd: Date | null =
+    planCurrentPeriodEndRaw && typeof planCurrentPeriodEndRaw.toDate === "function"
+      ? planCurrentPeriodEndRaw.toDate()
+      : planCurrentPeriodEndRaw instanceof Date
+        ? planCurrentPeriodEndRaw
+        : (typeof planCurrentPeriodEndRaw === "string" || typeof planCurrentPeriodEndRaw === "number")
+          ? new Date(planCurrentPeriodEndRaw)
+          : null;
+  const cancelDateLabel = planCurrentPeriodEnd
+    ? planCurrentPeriodEnd.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })
+    : "";
 
   const handleManagePlan = async () => {
     if (!user) return;
@@ -356,6 +373,14 @@ export default function UpgradePage() {
                     letterSpacing: "0.05em"
                   }}>★ CURRENT PLAN</span>
                 )}
+                {isCurrent && planCancelAtPeriodEnd && cancelDateLabel && (
+                  <span style={{
+                    position: "absolute", top: 14, right: 14,
+                    background: "#fef2f2", color: "#b91c1c", fontSize: "0.7rem", fontWeight: 800,
+                    padding: "3px 8px", borderRadius: 6, whiteSpace: "nowrap",
+                    border: "1px solid #fca5a5", letterSpacing: "0.04em",
+                  }}>⏳ ENDS {cancelDateLabel.toUpperCase()}</span>
+                )}
                 <div style={{ display: "inline-flex", background: accentBg, color: accent, borderRadius: 8, padding: "4px 12px", fontSize: "0.85rem", fontWeight: 800, marginBottom: 16, textTransform: "uppercase" }}>{label}</div>
                 <p style={{ fontFamily: "var(--font-main)", fontSize: "2.5rem", fontWeight: 900, color: "var(--text-dark)", margin: "0 0 4px", lineHeight: 1 }}>{price}</p>
                 <p style={{ fontSize: "0.85rem", color: "var(--text-muted)", margin: "0 0 16px", fontWeight: 600 }}>/{period}</p>
@@ -373,7 +398,9 @@ export default function UpgradePage() {
                 {isCurrent ? (
                   // Current-plan card: don't repeat "Upgrade to X". Surface a
                   // Manage Billing affordance only for paid plans (free has no
-                  // Stripe subscription to manage). Pro is shown as "Top tier".
+                  // Stripe subscription to manage). When the subscription is
+                  // scheduled to end at the period end, the label switches to
+                  // a cancellation-aware string so the creator sees the date.
                   platformPlan === "free" ? (
                     <div style={{
                       width: "100%", padding: "12px 0", fontSize: "0.85rem",
@@ -381,6 +408,19 @@ export default function UpgradePage() {
                     }}>
                       You're on the free plan.
                     </div>
+                  ) : planCancelAtPeriodEnd && cancelDateLabel ? (
+                    <button
+                      onClick={handleManagePlan}
+                      disabled={portalLoading}
+                      className="btn-brutal"
+                      style={{
+                        width: "100%", padding: "12px 0", fontSize: "0.9rem",
+                        borderColor: "#fca5a5", background: "#fef2f2", color: "#b91c1c",
+                      }}
+                      title="Click to keep your subscription or change your card"
+                    >
+                      {portalLoading ? "Opening…" : `Cancels on ${cancelDateLabel} → Manage`}
+                    </button>
                   ) : (
                     <button
                       onClick={handleManagePlan}

@@ -44,6 +44,12 @@ export interface FirestoreUser {
   platformPlan?: PlatformPlan;           // 'free' | 'creator' | 'pro'
   platformPlanStripeSubId?: string;       // Stripe subscription ID for this
   stripeCustomerId?: string;              // Stripe customer for billing portal
+  // If the user clicked "Cancel subscription" in the Stripe Billing Portal,
+  // their access stays active until the end of the current billing cycle.
+  // We mirror that state here so the /upgrade UI can label the current-plan
+  // button as "Cancels on <date>" instead of the usual "Manage Billing →".
+  planCancelAtPeriodEnd?: boolean;
+  planCurrentPeriodEnd?: Date | null;
 
   // ── Payout method ────────────────────────────────────────────────────────
   payoutMethod?: PayoutMethod;            // 'stripe_connect' | 'manual_bank'
