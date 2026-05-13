@@ -24,3 +24,33 @@ export function computeApplicationFee(amountCents: number, plan = "free"): numbe
 export function computeCreatorCut(amountCents: number, plan = "free"): number {
   return amountCents - computeApplicationFee(amountCents, plan);
 }
+
+// ── Monthly earning caps (cents) ─────────────────────────────────────────────
+// Free creators can earn up to $1k/mo before the cap kicks in. Creator plan
+// raises that to $10k/mo. Pro is uncapped. Crossing the cap triggers an
+// auto-upgrade attempt that's paid out of the creator's accrued earnings.
+export const PLAN_MONTHLY_CAP_CENTS: Record<string, number> = {
+  free:    100_000,    // $1,000
+  creator: 1_000_000,  // $10,000
+  pro:     Number.POSITIVE_INFINITY,
+};
+
+export function getMonthlyCapCents(plan = "free"): number {
+  return PLAN_MONTHLY_CAP_CENTS[plan.toLowerCase()] ?? PLAN_MONTHLY_CAP_CENTS.free;
+}
+
+// Monthly subscription price for each paid plan, in cents. Used by the
+// auto-upgrade flow when a creator exceeds their earning cap and we need to
+// deduct the next tier's fee from their accrued earnings.
+export const PLAN_MONTHLY_FEE_CENTS: Record<string, number> = {
+  free:    0,
+  creator: 499,   // $4.99
+  pro:     999,   // $9.99
+};
+
+export function nextPlanTier(plan: string): "creator" | "pro" | null {
+  const p = plan.toLowerCase();
+  if (p === "free") return "creator";
+  if (p === "creator") return "pro";
+  return null; // pro has no higher tier
+}

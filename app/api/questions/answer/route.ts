@@ -18,6 +18,22 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Missing fields" }, { status: 400 });
     }
 
+    // Block answers when the creator owes the platform a plan fee that we
+    // couldn't deduct from their accrued earnings. Fans can still ask — only
+    // outbound answers are gated. The /payout banner tells the creator what
+    // to do.
+    const creatorSnapEarly = await adminDb.collection("users").doc(creatorId).get();
+    if (creatorSnapEarly.data()?.paymentDue) {
+      return NextResponse.json(
+        {
+          error: "PAYMENT_DUE",
+          message: "Resolve your outstanding plan fee in /upgrade before replying to new questions.",
+          owedCents: creatorSnapEarly.data()?.paymentDueCents ?? 0,
+        },
+        { status: 402 },
+      );
+    }
+
     const questionRef = adminDb.collection("questions").doc(questionId);
     
     // 🔒 Use transaction to prevent race conditions with auto-refund cron
@@ -43,9 +59,8 @@ export async function POST(req: NextRequest) {
       return q; // Return original data for email
     });
 
-    // Fetch creator name
-    const creatorSnap = await adminDb.collection("users").doc(creatorId).get();
-    const creatorName = creatorSnap.data()?.displayName || "Your Expert";
+    // Re-use the creator snapshot we already fetched above (still fresh).
+    const creatorName = creatorSnapEarly.data()?.displayName || "Your Expert";
 
     // ✉️ Email asker with answer
     await sendAnswerEmail({

@@ -163,6 +163,49 @@ function SettingsContent() {
   const earningsFormatted = `$${(totalEarnings / 100).toFixed(2)}`;
   const progressPct       = Math.min(100, (totalEarnings / 5000) * 100);
 
+  // ── Monthly cap + auto-upgrade enforcement state ──────────────────────────
+  // We ask the server for the last-30-day earnings + plan cap on payout tab
+  // mount. The same endpoint also runs the auto-upgrade-from-earnings logic
+  // and sets paymentDue when accrued earnings can't cover the next-tier fee.
+  type PlanBalance = {
+    plan: string;
+    monthlyEarningsCents: number;
+    capCents: number;
+    exceeded: boolean;
+    upgradedTo?: string;
+    paymentDue?: boolean;
+    paymentDueCents?: number;
+  };
+  const [planBalance, setPlanBalance] = useState<PlanBalance | null>(null);
+
+  useEffect(() => {
+    if (tab !== "payout" || !user) return;
+    let stale = false;
+    (async () => {
+      try {
+        const { getIdToken } = await import("firebase/auth");
+        const token = await getIdToken(user as any);
+        const res = await fetch("/api/billing/check-plan-balance", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) return;
+        const data = (await res.json()) as PlanBalance;
+        if (!stale) setPlanBalance(data);
+      } catch { /* swallow — non-critical UI hint */ }
+    })();
+    return () => { stale = true; };
+  }, [tab, user]);
+
+  // Earnings breakdown derived from lifetime gross (totalEarnings) at the
+  // creator's current fee tier. These are what the UI surfaces in the new
+  // payout breakdown card.
+  const platformCutCents = Math.round((totalEarnings * feePercent) / 100);
+  const creatorNetCents  = totalEarnings - platformCutCents;
+
+  const paymentDue        = !!(userProfile as any)?.paymentDue;
+  const paymentDueCents   = ((userProfile as any)?.paymentDueCents ?? 0) as number;
+
   // ── redirect if not logged in ──────────────────────────────────────────────
   useEffect(() => {
     if (!loading && !user) router.push("/auth");
@@ -395,6 +438,15 @@ function SettingsContent() {
                 platformPlan={platformPlan} portalLoading={portalLoading}
                 handleManagePlan={handleManagePlan} pendingBalance={pendingBalance}
                 totalEarnings={totalEarnings} payoutMethod={payoutMethod}
+                feePercent={feePercent}
+                platformCutCents={platformCutCents}
+                creatorNetCents={creatorNetCents}
+                monthlyEarningsCents={planBalance?.monthlyEarningsCents ?? null}
+                monthlyCapCents={planBalance?.capCents ?? null}
+                exceededCap={planBalance?.exceeded ?? false}
+                upgradedTo={planBalance?.upgradedTo}
+                paymentDue={paymentDue}
+                paymentDueCents={paymentDueCents}
                 setPayoutMethod={setPayoutMethod} userProfile={userProfile}
                 handlePayoutSetup={handlePayoutSetup} stripeLoading={stripeLoading}
                 accountHolder={accountHolder} setAccountHolder={setAccountHolder}

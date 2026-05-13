@@ -9,6 +9,17 @@ interface PayoutTabProps {
   payoutUnlocked: boolean;
   earningsFormatted: string;
   progressPct: number;
+  // ── Earnings breakdown (computed in the parent against current fee tier) ──
+  feePercent: number;
+  platformCutCents: number;
+  creatorNetCents: number;
+  // ── Monthly cap / auto-upgrade state (null = not yet checked) ────────────
+  monthlyEarningsCents: number | null;
+  monthlyCapCents: number | null;
+  exceededCap: boolean;
+  upgradedTo?: string;
+  paymentDue: boolean;
+  paymentDueCents: number;
   handleManagePlan: () => void;
   portalLoading: boolean;
   userProfile: any;
@@ -32,6 +43,10 @@ interface PayoutTabProps {
   setPaypalEmail: (v: string) => void;
   wiseEmail: string;
   setWiseEmail: (v: string) => void;
+}
+
+function formatCents(c: number): string {
+  return `$${(c / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 const labelStyle: React.CSSProperties = {
@@ -64,14 +79,140 @@ function chipStyle(active: boolean, color: "purple" | "green" | "orange"): React
 
 export default function PayoutTab({
   platformPlan, totalEarnings, pendingBalance, payoutUnlocked, earningsFormatted, progressPct,
+  feePercent, platformCutCents, creatorNetCents,
+  monthlyEarningsCents, monthlyCapCents, exceededCap, upgradedTo,
+  paymentDue, paymentDueCents,
   handleManagePlan, portalLoading, userProfile, handlePayoutSetup, stripeLoading,
   payoutMethod, setPayoutMethod, accountHolder, setAccountHolder, bankName, setBankName,
   accountNumber, setAccountNumber, bankCountry, setBankCountry, ifscCode, setIfscCode,
   swiftCode, setSwiftCode, paypalEmail, setPaypalEmail, wiseEmail, setWiseEmail
 }: PayoutTabProps) {
+  const planLabel = platformPlan === "pro" ? "Pro" : platformPlan === "creator" ? "Creator" : "Free";
+  const monthlyPct = monthlyEarningsCents != null && monthlyCapCents != null && isFinite(monthlyCapCents)
+    ? Math.min(100, (monthlyEarningsCents / monthlyCapCents) * 100)
+    : 0;
+  const monthlyOver80 = monthlyPct >= 80;
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 32 }}>
-      
+
+      {/* PAYMENT DUE BANNER — auto-upgrade ran but couldn't deduct fee from
+          accrued earnings. Creator can't reply to new questions until they
+          resolve it. Shown above everything so it's impossible to miss. */}
+      {paymentDue && (
+        <div style={{
+          background: "linear-gradient(135deg, #fef2f2, #fff)",
+          border: "2px solid #fca5a5", borderRadius: 16, padding: "18px 22px",
+          display: "flex", gap: 14, alignItems: "flex-start",
+        }}>
+          <span style={{ fontSize: "1.6rem" }}>⚠️</span>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontFamily: "var(--font-main)", fontWeight: 900, color: "#b91c1c", fontSize: "1rem", marginBottom: 4 }}>
+              Plan fee unpaid — replies are paused
+            </div>
+            <div style={{ color: "#7f1d1d", fontSize: "0.88rem", lineHeight: 1.55 }}>
+              You exceeded your <strong>{planLabel}</strong> plan's monthly earning cap, so we
+              tried to bump you to the next tier from your accrued earnings.
+              You're short by <strong>{formatCents(paymentDueCents)}</strong>. Until this is
+              settled, you can't reply to new questions, but fans can still ask.
+            </div>
+            <button onClick={handleManagePlan} disabled={portalLoading}
+              className="btn-brutal" style={{
+                marginTop: 12, padding: "10px 20px", fontSize: "0.9rem",
+                background: "#b91c1c", color: "#fff", borderColor: "#b91c1c",
+              }}>
+              {portalLoading ? "Opening…" : "Resolve in Billing →"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {upgradedTo && upgradedTo !== platformPlan && (
+        <div style={{
+          background: "linear-gradient(135deg, #ecfdf5, #fff)",
+          border: "2px solid #6ee7b7", borderRadius: 16, padding: "16px 22px",
+          display: "flex", gap: 14, alignItems: "flex-start",
+        }}>
+          <span style={{ fontSize: "1.4rem" }}>🎉</span>
+          <div>
+            <div style={{ fontFamily: "var(--font-main)", fontWeight: 900, color: "#047857", fontSize: "0.95rem" }}>
+              Auto-upgraded to {upgradedTo === "pro" ? "Pro" : "Creator"}
+            </div>
+            <div style={{ color: "#065f46", fontSize: "0.85rem", lineHeight: 1.5, marginTop: 2 }}>
+              You hit your monthly cap so we moved you to the next tier and
+              deducted the subscription fee from your accrued earnings.
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* EARNINGS BREAKDOWN — current fee tier + how the lifetime gross splits */}
+      <div className="card-brutal">
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
+          <div style={{ background: "var(--bg-soft)", color: "var(--text-dark)", width: 40, height: 40, borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.2rem", border: "2px solid var(--border)" }}>💰</div>
+          <h2 className="font-display" style={{ fontSize: "1.4rem", color: "var(--text-dark)", margin: 0 }}>Earnings Breakdown</h2>
+        </div>
+        <p style={{ color: "var(--text-muted)", fontSize: "0.9rem", marginBottom: 18 }}>
+          You're on the <strong>{planLabel}</strong> plan — current platform fee is
+          {" "}<strong style={{ color: feePercent === 0 ? "#10b981" : feePercent <= 5 ? "#7c3aed" : "#f59e0b" }}>{feePercent}% per transaction</strong>.
+        </p>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 14 }}>
+          <div style={{ background: "#fff", border: "2px solid var(--border)", borderRadius: 14, padding: 16 }}>
+            <div style={{ fontSize: "0.72rem", color: "var(--text-muted)", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em" }}>Lifetime Gross</div>
+            <div style={{ fontFamily: "var(--font-main)", fontWeight: 900, fontSize: "1.6rem", color: "var(--text-dark)", marginTop: 4 }}>{formatCents(totalEarnings)}</div>
+          </div>
+          <div style={{ background: "#fff", border: "2px solid var(--border)", borderRadius: 14, padding: 16 }}>
+            <div style={{ fontSize: "0.72rem", color: "var(--text-muted)", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em" }}>Your Net ({100 - feePercent}%)</div>
+            <div style={{ fontFamily: "var(--font-main)", fontWeight: 900, fontSize: "1.6rem", color: "#10b981", marginTop: 4 }}>{formatCents(creatorNetCents)}</div>
+          </div>
+          <div style={{ background: "#fff", border: "2px solid var(--border)", borderRadius: 14, padding: 16 }}>
+            <div style={{ fontSize: "0.72rem", color: "var(--text-muted)", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em" }}>Platform Fee ({feePercent}%)</div>
+            <div style={{ fontFamily: "var(--font-main)", fontWeight: 900, fontSize: "1.6rem", color: "#f59e0b", marginTop: 4 }}>{formatCents(platformCutCents)}</div>
+          </div>
+        </div>
+      </div>
+
+      {/* MONTHLY CAP — last 30 days vs current plan limit */}
+      {monthlyEarningsCents != null && monthlyCapCents != null && (
+        <div className="card-brutal" style={{ borderColor: exceededCap ? "#fca5a5" : monthlyOver80 ? "#fbbf24" : "var(--border)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 10 }}>
+            <div style={{ background: "var(--bg-soft)", color: "var(--text-dark)", width: 40, height: 40, borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.2rem", border: "2px solid var(--border)" }}>📅</div>
+            <h2 className="font-display" style={{ fontSize: "1.4rem", color: "var(--text-dark)", margin: 0 }}>This Month</h2>
+          </div>
+          <p style={{ color: "var(--text-muted)", fontSize: "0.88rem", marginBottom: 14 }}>
+            Earnings in the last 30 days against your {planLabel} plan's monthly cap.
+            {isFinite(monthlyCapCents) ? null : <> Pro plan is uncapped.</>}
+          </p>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
+            <span style={{ fontFamily: "var(--font-main)", fontWeight: 900, fontSize: "1.4rem", color: exceededCap ? "#b91c1c" : "var(--text-dark)" }}>
+              {formatCents(monthlyEarningsCents)}
+            </span>
+            <span style={{ color: "var(--text-muted)", fontSize: "0.85rem", fontWeight: 600 }}>
+              of {isFinite(monthlyCapCents) ? formatCents(monthlyCapCents) : "∞"} cap
+            </span>
+          </div>
+          {isFinite(monthlyCapCents) && (
+            <div style={{ height: 12, background: "#f3f4f6", borderRadius: 99, overflow: "hidden" }}>
+              <div style={{
+                height: "100%", width: `${monthlyPct}%`,
+                background: exceededCap ? "#b91c1c" : monthlyOver80 ? "#f59e0b" : "var(--purple)",
+                transition: "width 0.6s cubic-bezier(0.4,0,0.2,1)",
+              }} />
+            </div>
+          )}
+          {exceededCap && !paymentDue && upgradedTo && upgradedTo !== platformPlan && (
+            <p style={{ color: "#065f46", fontSize: "0.85rem", marginTop: 10, fontWeight: 600 }}>
+              ✅ Cap exceeded — we already moved you to the {upgradedTo} tier.
+            </p>
+          )}
+          {monthlyOver80 && !exceededCap && (
+            <p style={{ color: "#92400e", fontSize: "0.85rem", marginTop: 10, fontWeight: 600 }}>
+              ⚠️ You're approaching your monthly cap. Upgrade now to avoid an auto-upgrade fee later.
+            </p>
+          )}
+        </div>
+      )}
+
       {/* EARNINGS PROGRESS */}
       <div className="card-brutal-purple">
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>

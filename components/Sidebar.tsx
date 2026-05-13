@@ -384,19 +384,26 @@ export default function Sidebar() {
       {/* Footer */}
       <div style={{ ...css.footer, position: "relative" }}>
         
-        {/* UPGRADE PLAN LINK */}
-        {userProfile && (
-          <Link href="/upgrade" style={{
+        {/* UPGRADE PLAN LINK — label adapts to current plan so it doesn't tell
+            paying users to "Upgrade" when they're already paying. */}
+        {userProfile && (() => {
+          const planKey = ((userProfile as any).platformPlan ?? "free") as "free" | "creator" | "pro";
+          const label = planKey === "free" ? "Upgrade Plan" : planKey === "pro" ? "Manage Plan" : "Manage Plan";
+          const icon  = planKey === "free" ? "🚀" : "⚙️";
+          return (
+          <Link href="/upgrade" data-plan={planKey} style={{
             display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-            background: "linear-gradient(135deg, #f59e0b, #fbbf24)", color: "#fff",
+            background: planKey === "free" ? "linear-gradient(135deg, #f59e0b, #fbbf24)" : "linear-gradient(135deg, #7c3aed, #a855f7)",
+            color: "#fff",
             padding: isCollapsed ? "10px" : "12px", borderRadius: 12,
             textDecoration: "none", fontWeight: 800, marginBottom: 16,
-            boxShadow: "0 4px 14px rgba(245,158,11,0.3)",
+            boxShadow: planKey === "free" ? "0 4px 14px rgba(245,158,11,0.3)" : "0 4px 14px rgba(124,58,237,0.3)",
             fontSize: isCollapsed ? "1.2rem" : "0.95rem"
           }}>
-            🚀 {!isCollapsed && "Upgrade Plan"}
+            {icon} {!isCollapsed && label}
           </Link>
-        )}
+          );
+        })()}
 
         {/* Creator / Fan toggle */}
         {!isCollapsed && (
@@ -421,9 +428,27 @@ export default function Sidebar() {
           </div>
         )}
 
-        {userProfile?.username && (
-          isCollapsed ? (
-            <Tooltip content={`${userProfile.displayName || userProfile.username}`} placement="right">
+        {userProfile?.username && (() => {
+          // Reflect the creator's platform plan as a small badge next to their
+          // name so it's visible from every authenticated page without having
+          // to open /upgrade.
+          const planKey = ((userProfile as any).platformPlan ?? "free") as "free" | "creator" | "pro";
+          const planMeta: Record<typeof planKey, { label: string; bg: string; fg: string }> = {
+            free:    { label: "FREE",    bg: "rgba(161,161,170,0.18)", fg: "#a1a1aa" },
+            creator: { label: "CREATOR", bg: "rgba(124,58,237,0.18)",  fg: "#a78bfa" },
+            pro:     { label: "PRO",     bg: "rgba(16,185,129,0.18)",  fg: "#34d399" },
+          };
+          const badge = planMeta[planKey];
+          const planBadge = (
+            <span style={{
+              display: "inline-flex", alignItems: "center",
+              fontFamily: "'Outfit',sans-serif", fontWeight: 800, fontSize: "0.6rem",
+              letterSpacing: "0.08em", padding: "2px 6px", borderRadius: 6,
+              background: badge.bg, color: badge.fg, marginTop: 4,
+            }}>{badge.label}</span>
+          );
+          return isCollapsed ? (
+            <Tooltip content={`${userProfile.displayName || userProfile.username} · ${badge.label}`} placement="right">
               <div style={{...css.user, cursor: "pointer"}} onClick={() => router.push("/upgrade")}>
                 <div style={css.avatar}>
                   {(userProfile.displayName || userProfile.username)?.[0]?.toUpperCase() ?? "?"}
@@ -438,10 +463,11 @@ export default function Sidebar() {
               <div style={css.userInfo}>
                 <div style={css.userName}>{userProfile.displayName || userProfile.username}</div>
                 <div style={css.userHandle}>@{userProfile.username}</div>
+                {planBadge}
               </div>
             </div>
-          )
-        )}
+          );
+        })()}
         
         {isCollapsed ? (
           <Tooltip content="Sign out" placement="right">

@@ -64,6 +64,18 @@ export interface FirestoreUser {
   // ── Earnings ─────────────────────────────────────────────────────────────
   totalEarnings?: number;                // in cents, lifetime gross
 
+  // ── Auto-upgrade billing (paid out of accrued earnings) ──────────────────
+  // When the creator exceeds their plan's monthly cap and we auto-upgrade
+  // them, the new tier's monthly fee is deducted from totalEarnings. If
+  // there isn't enough to cover it, paymentDue is set and the creator is
+  // blocked from answering questions until the balance is settled (fans
+  // can still ask in the meantime).
+  paymentDue?: boolean;
+  paymentDueCents?: number;
+  paymentDueSince?: Date;
+  lastPlanFeeChargedAt?: Date;
+  lastPlanCapCheck?: Date;
+
   // ── Profile ──────────────────────────────────────────────────────────────
   socialLinks?: SocialLink[];
   categories?: string[];

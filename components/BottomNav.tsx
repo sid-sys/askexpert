@@ -173,9 +173,26 @@ export default function BottomNav() {
               </div>
               <div style={{ minWidth: 0, flex: 1 }}>
                 <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: "0.9rem", fontWeight: 700, color: "#fff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{profileName}</div>
-                {userProfile?.username && (
-                  <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: "0.72rem", color: "rgba(167,139,250,0.7)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>@{userProfile.username}</div>
-                )}
+                <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 2 }}>
+                  {userProfile?.username && (
+                    <span style={{ fontFamily: "'Outfit',sans-serif", fontSize: "0.72rem", color: "rgba(167,139,250,0.7)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>@{userProfile.username}</span>
+                  )}
+                  {(() => {
+                    const planKey = ((userProfile as any)?.platformPlan ?? "free") as "free" | "creator" | "pro";
+                    const meta = {
+                      free:    { label: "FREE",    bg: "rgba(161,161,170,0.22)", fg: "#d4d4d8" },
+                      creator: { label: "CREATOR", bg: "rgba(245,158,11,0.22)",  fg: "#fbbf24" },
+                      pro:     { label: "PRO",     bg: "rgba(16,185,129,0.22)",  fg: "#34d399" },
+                    }[planKey];
+                    return (
+                      <span style={{
+                        fontFamily: "'Outfit',sans-serif", fontWeight: 800, fontSize: "0.55rem",
+                        letterSpacing: "0.08em", padding: "1px 5px", borderRadius: 5,
+                        background: meta.bg, color: meta.fg, flexShrink: 0,
+                      }}>{meta.label}</span>
+                    );
+                  })()}
+                </div>
               </div>
             </div>
 

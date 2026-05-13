@@ -294,6 +294,24 @@ export default function QuestionCard({ question, onAnswered }: QuestionCardProps
           answerAttachmentUrls: uploadedUrls.length > 0 ? uploadedUrls : undefined,
         }),
       });
+      // 402 = paymentDue (auto-upgrade couldn't deduct fee from accrued
+      // earnings). Surface the specific reason so the creator knows where to
+      // go instead of seeing the generic "Failed" toast.
+      if (res.status === 402) {
+        const body = await res.json().catch(() => ({}));
+        const owed = body?.owedCents ? `$${(body.owedCents / 100).toFixed(2)} ` : "";
+        await Swal.fire({
+          icon: "warning",
+          title: "Replies paused",
+          html: `You owe ${owed}toward your platform plan fee. <br/>Resolve it in your <strong>Plan / Billing</strong> page, then try again.`,
+          confirmButtonColor: "#7c3aed",
+          confirmButtonText: "Open Billing",
+        }).then((r) => {
+          if (r.isConfirmed) window.location.href = "/upgrade";
+        });
+        setSubmitting(false);
+        return;
+      }
       if (!res.ok) throw new Error("Failed");
       // Clear everything
       setResponseText("");

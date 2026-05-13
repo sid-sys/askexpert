@@ -2,19 +2,85 @@
 
 import { useAuth } from "@/context/AuthContext";
 import { useProfileSettings } from "@/app/profile/useProfileSettings";
-import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
 import Swal from "sweetalert2";
+
+const PLAN_LABEL: Record<string, string> = {
+  free: "Free",
+  creator: "Creator",
+  pro: "Pro",
+};
 
 export default function UpgradePage() {
   const { user, userProfile, loading, logout } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   const [portalLoading, setPortalLoading] = useState(false);
+  // True while we're hitting /api/stripe/sync-plan after a Checkout redirect so
+  // the page can show a "Verifying your plan…" affordance.
+  const [verifying, setVerifying] = useState(false);
+  // Avoid running the post-checkout sync twice (React Strict Mode double-mount,
+  // or if the URL is shared / refreshed).
+  const handledRedirectRef = useRef(false);
 
   useEffect(() => {
     if (!loading && !user) router.push("/login");
   }, [user, loading, router]);
+
+  // After a Stripe Checkout return we end up at /upgrade?plan_activated=<plan>
+  // (success) or /upgrade?plan_cancelled=true (user backed out of Checkout, or
+  // a subscription was cancelled via the Billing Portal). In both cases we
+  // proactively hit /api/stripe/sync-plan so the local Firestore platformPlan
+  // matches Stripe even when the webhook isn't reachable (e.g. local dev).
+  useEffect(() => {
+    if (!user || handledRedirectRef.current) return;
+    const activated = searchParams?.get("plan_activated");
+    const cancelled = searchParams?.get("plan_cancelled");
+    if (!activated && !cancelled) return;
+    handledRedirectRef.current = true;
+
+    let stale = false;
+    (async () => {
+      setVerifying(true);
+      try {
+        const { getIdToken } = await import("firebase/auth");
+        const token = await getIdToken(user as any);
+        await fetch("/api/stripe/sync-plan", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+        }).catch(() => {});
+
+        if (stale) return;
+
+        if (activated) {
+          await Swal.fire({
+            icon: "success",
+            title: `You're on ${PLAN_LABEL[activated] ?? "your new plan"}! 🎉`,
+            text: "Your platform fee is updated. Welcome to the new tier.",
+            confirmButtonColor: "#7c3aed",
+            timer: 4000,
+            timerProgressBar: true,
+          });
+        } else if (cancelled === "true") {
+          await Swal.fire({
+            icon: "info",
+            title: "Checkout cancelled",
+            text: "No changes were made to your plan.",
+            confirmButtonColor: "#7c3aed",
+          });
+        }
+      } finally {
+        if (!stale) {
+          setVerifying(false);
+          // Strip the URL params so a refresh doesn't re-toast.
+          router.replace("/upgrade");
+        }
+      }
+    })();
+    return () => { stale = true; };
+  }, [user, searchParams, router]);
 
   if (loading || !user) return <div style={{ padding: 40, color: "white" }}>Loading...</div>;
 
@@ -109,7 +175,19 @@ export default function UpgradePage() {
           <div style={{ background: "var(--purple-light)", color: "var(--purple)", width: 40, height: 40, borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.2rem", border: "2px solid rgba(124,58,237,0.2)" }}>🚀</div>
           <h2 className="font-display" style={{ fontSize: "1.8rem", color: "var(--text-dark)", margin: 0 }}>Your Plan</h2>
         </div>
-        <p style={{ color: "var(--text-muted)", fontSize: "0.95rem", marginBottom: 30, maxWidth: 500 }}>Your plan determines your platform fee. Upgrade to keep more of what you earn and unlock premium features.</p>
+        <p style={{ color: "var(--text-muted)", fontSize: "0.95rem", marginBottom: 18, maxWidth: 500 }}>Your plan determines your platform fee. Upgrade to keep more of what you earn and unlock premium features.</p>
+
+        {verifying && (
+          <div style={{
+            display: "flex", alignItems: "center", gap: 10,
+            background: "rgba(124,58,237,0.08)", border: "1px solid rgba(124,58,237,0.25)",
+            color: "#7c3aed", padding: "10px 14px", borderRadius: 12,
+            marginBottom: 18, fontSize: "0.85rem", fontWeight: 600,
+          }}>
+            <span>⏳</span>
+            <span>Verifying your plan with Stripe…</span>
+          </div>
+        )}
 
         {/* 3-column grid on desktop, collapses to a single column below 720px.
             `minmax(0, 1fr)` lets each card shrink to fit instead of insisting
@@ -171,7 +249,31 @@ export default function UpgradePage() {
                     </li>
                   ))}
                 </ul>
-                {!isCurrent && (
+                {isCurrent ? (
+                  // Current-plan card: don't repeat "Upgrade to X". Surface a
+                  // Manage Billing affordance only for paid plans (free has no
+                  // Stripe subscription to manage). Pro is shown as "Top tier".
+                  platformPlan === "free" ? (
+                    <div style={{
+                      width: "100%", padding: "12px 0", fontSize: "0.85rem",
+                      textAlign: "center", color: "var(--text-muted)", fontWeight: 700,
+                    }}>
+                      You're on the free plan.
+                    </div>
+                  ) : (
+                    <button
+                      onClick={handleManagePlan}
+                      disabled={portalLoading}
+                      className="btn-brutal"
+                      style={{
+                        width: "100%", padding: "12px 0", fontSize: "0.95rem",
+                        borderColor: accent, background: "transparent", color: accent,
+                      }}
+                    >
+                      {portalLoading ? "Opening…" : "Manage Billing →"}
+                    </button>
+                  )
+                ) : (
                   <button
                     onClick={() => {
                       // Free users have no Stripe subscription yet, so the
@@ -188,9 +290,9 @@ export default function UpgradePage() {
                     className="btn-brutal"
                     style={{
                       width: "100%", padding: "12px 0", fontSize: "0.95rem",
-                      borderColor: accent,
+                      borderColor: isDowngrade ? "#cbd5e1" : accent,
                       background: isUpgrade ? accent : "transparent",
-                      color: isUpgrade ? "#fff" : accent,
+                      color: isUpgrade ? "#fff" : isDowngrade ? "var(--text-muted)" : accent,
                     }}
                   >
                     {portalLoading ? "Processing..." : isUpgrade ? `Upgrade to ${label} →` : isDowngrade ? `Downgrade to ${label}` : ""}
