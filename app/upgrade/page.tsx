@@ -4,7 +4,7 @@ import { reportBug } from "@/lib/report-bug";
 import { useAuth } from "@/context/AuthContext";
 import { useProfileSettings } from "@/app/profile/useProfileSettings";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, Suspense } from "react";
 import Swal from "sweetalert2";
 
 const PLAN_LABEL: Record<string, string> = {
@@ -13,7 +13,7 @@ const PLAN_LABEL: Record<string, string> = {
   pro: "Pro",
 };
 
-export default function UpgradePage() {
+function UpgradeContent() {
   const { user, userProfile, loading, logout } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -577,3 +577,12 @@ export default function UpgradePage() {
     </div>
   );
 }
+
+export default function UpgradePage() {
+  return (
+    <Suspense fallback={<div style={{ padding: 40, color: "white" }}>Loading page...</div>}>
+      <UpgradeContent />
+    </Suspense>
+  );
+}
+

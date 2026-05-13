@@ -292,6 +292,8 @@ export default function CreatorProfilePage({ params }: { params: Promise<{ usern
     </div>
   );
 
+  if (!display) return null;
+
   // ── build content (text + file names) ──────────────────────────────────────
   function buildContent() {
     return question.trim();
@@ -569,12 +571,12 @@ export default function CreatorProfilePage({ params }: { params: Promise<{ usern
   }
 
   // ── derived values ───────────────────────────────────────────────────────
-  const slaLabel  = formatResponseTime(display.responseTimeHours || 72);
-  const currencySymbol = CURRENCY_SYMBOLS[(display.currency || "usd").toLowerCase()] || "$";
-  const socialLinks: SocialLink[] = Array.isArray((display as any).socialLinks)
+  const slaLabel  = formatResponseTime(display?.responseTimeHours || 72);
+  const currencySymbol = CURRENCY_SYMBOLS[(display?.currency || "usd").toLowerCase()] || "$";
+  const socialLinks: SocialLink[] = Array.isArray((display as any)?.socialLinks)
     ? (display as any).socialLinks
     : [];
-  const categories: string[]   = (display as any).categories ?? [];
+  const categories: string[]   = (display as any)?.categories ?? [];
 
   return (
     <>

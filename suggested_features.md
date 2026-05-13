@@ -64,3 +64,8 @@
 32. **Video Q&A Response**: Enable experts to upload or record short video responses directly in the dashboard for a more personal touch.
 33. **Expert Referral System**: Reward existing creators with lower platform fees for a limited time when they refer new successful experts.
 34. **Dashboard Question Archive**: Implement an archiving system for answered questions to declutter the active dashboard view.
+
+35. **Suspense Boundaries for Enhanced UX**: Utilize React Suspense boundaries more broadly around data-fetching components to provide immediate visual feedback (like skeleton loaders) while waiting for data.
+36. **Optimistic UI Updates**: Implement optimistic UI updates when users perform actions like updating profile settings or asking questions, assuming success to make the app feel faster, reverting only if the server request fails.
+37. **Route Prefetching Strategy**: Leverage Next.js <Link> component's prefetching behavior and implement strategic manual prefetching for critical flows (like the upgrade path or asking a question) to ensure near-instant page loads.
+

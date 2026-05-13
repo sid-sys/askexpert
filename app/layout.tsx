@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import "./globals.css";
 import { AuthProvider } from "@/context/AuthContext";
 import { ThemeProvider } from "@/context/ThemeContext";
@@ -57,7 +58,9 @@ export default function RootLayout({
         <ThemeProvider>
           <AuthProvider>
             {/* Persistent dark sidebar — visible on desktop only */}
-            <Sidebar />
+            <Suspense fallback={null}>
+              <Sidebar />
+            </Suspense>
 
             {/* Main content area — shifts right when sidebar is shown */}
             <SidebarShell>
@@ -74,7 +77,9 @@ export default function RootLayout({
             <CookieConsent />
             <PremiumEffects />
             <FeedbackButton />
-            <BottomNav />
+            <Suspense fallback={null}>
+              <BottomNav />
+            </Suspense>
             <PresenceHeartbeat />
           </AuthProvider>
         </ThemeProvider>

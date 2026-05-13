@@ -40,3 +40,9 @@
 - **Browser Verification**: Confirmed authentication and landing page rendering.
 - **Documentation Sync**: Updated `summaryofchanges.md` and `suggested_features.md` to reflect current session activity.
 - **Port Conflict Fix**: Identified and terminated zombie process (PID 17604) on port 3000 to resolve `localhost:3001` refusal. Project now correctly serves on default port 3000.
+
+
+## Static Generation & Suspense Boundaries
+- **Prerendering Fixes**: Wrapped the client components in \pp/fan-dashboard/page.tsx\ and \pp/upgrade/page.tsx\ with React \<Suspense>\ boundaries. Next.js statically analyzes routes during \
+ext build\, and using \useSearchParams\ in an un-Suspended client component causes the build to fail if the route isn't explicitly marked as dynamic. By wrapping the content in \<Suspense>\, we ensure the build succeeds and the components stream in on the client side properly.
+

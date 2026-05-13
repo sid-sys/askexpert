@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { useRouter, useSearchParams } from "next/navigation";
 import { collection, query, where, getDocs, onSnapshot } from "firebase/firestore";
@@ -48,7 +48,7 @@ const NAV: { id: NavId; label: string; icon: React.ReactElement }[] = [
   },
 ];
 
-export default function FanDashboardPage() {
+function FanDashboardContent() {
   const { user, userProfile, logout } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -1033,5 +1033,13 @@ function FanSubscriptionRow({
         </div>
       </div>
     </div>
+  );
+}
+
+export default function FanDashboardPage() {
+  return (
+    <Suspense fallback={null}>
+      <FanDashboardContent />
+    </Suspense>
   );
 }
