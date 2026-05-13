@@ -1,21 +1,31 @@
 // POST /api/stripe/change-plan
 //
-// Swap the price on the user's existing Stripe subscription in place. Used
-// for paid -> paid plan changes (creator -> pro, pro -> creator) so we don't
-// end up with two parallel subscriptions for the same user. Stripe handles
-// the prorated charge automatically.
+// Plan change for paying users. The user picks one of two payment methods:
 //
-// Side-effect: if the user already has *multiple* active platform-plan
-// subscriptions (from earlier buggy upgrade flows that double-subscribed
-// instead of swapping), all but the one being kept are cancelled so the
-// Billing Portal stops showing duplicates.
+//   - "card"     : we cancel every existing platform sub (no proration so
+//                  no credits get queued for later invoices), then return a
+//                  fresh Stripe Checkout URL for the target plan at its
+//                  full advertised price. The frontend redirects to the
+//                  Checkout. Webhook reactivates platformPlan on success.
 //
-// Body: { plan: "creator" | "pro" }
+//   - "earnings" : the new plan's monthly fee is deducted from the
+//                  creator's accrued totalEarnings, the existing sub is
+//                  swapped to the new price with proration_behavior:"none"
+//                  (so Stripe doesn't try to invoice anything), and the
+//                  platformPlan / cumulative net+fee fields are updated
+//                  locally. No Stripe charge is created.
+//                  Returns 402 if accrued earnings can't cover the fee.
+//
+// Side-effect: any orphan duplicate platform-plan subscriptions on the
+// customer get cancelled (prorate:false) so the Billing Portal stays clean.
+//
+// Body: { plan: "creator" | "pro", method: "card" | "earnings" }
 // Auth: Firebase ID token in Authorization: Bearer <token>
 import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
 import { stripe } from "@/lib/stripe";
 import { adminAuth, adminDb, FieldValue } from "@/lib/firebase-admin";
+import { PLAN_MONTHLY_FEE_CENTS } from "@/lib/stripe";
 
 const PLAN_PRICES: Record<string, string | undefined> = {
   creator: process.env.STRIPE_CREATOR_PRICE_ID,
@@ -42,116 +52,127 @@ export async function POST(req: NextRequest) {
     const decoded = await adminAuth.verifyIdToken(idToken);
     const uid = decoded.uid;
 
-    const { plan } = (await req.json()) as { plan: "creator" | "pro" };
-    if (plan !== "creator" && plan !== "pro") {
-      return NextResponse.json({ error: "Invalid plan" }, { status: 400 });
-    }
+    const body = await req.json() as { plan?: "creator" | "pro"; method?: "card" | "earnings" };
+    const plan = body.plan;
+    const method = body.method ?? "card";
+    if (plan !== "creator" && plan !== "pro") return NextResponse.json({ error: "Invalid plan" }, { status: 400 });
+    if (method !== "card" && method !== "earnings") return NextResponse.json({ error: "Invalid method" }, { status: 400 });
+
     const targetPriceId = PLAN_PRICES[plan];
     if (!targetPriceId) return NextResponse.json({ error: "Plan price not configured" }, { status: 500 });
 
     const userRef = adminDb.collection("users").doc(uid);
     const userSnap = await userRef.get();
     const userData = userSnap.data() ?? {};
+    const email = decoded.email ?? userData.email ?? "";
 
-    // Pull every platform-plan subscription this user owns so we can keep
-    // one and cancel the rest. Fall back to email lookup if we don't have
-    // a customer id cached yet.
+    // Locate / list platform subscriptions for this customer.
     let customerId = userData.stripeCustomerId as string | undefined;
-    if (!customerId && decoded.email) {
-      const search = await stripe.customers.list({ email: decoded.email, limit: 1 });
+    if (!customerId && email) {
+      const search = await stripe.customers.list({ email, limit: 1 });
       if (search.data.length > 0) customerId = search.data[0].id;
     }
-    if (!customerId) {
-      return NextResponse.json(
-        { error: "NO_EXISTING_SUBSCRIPTION", message: "No Stripe customer on file — start with a fresh Checkout." },
-        { status: 404 },
-      );
+
+    const existingPlatformSubs: Stripe.Subscription[] = [];
+    if (customerId) {
+      const list = await stripe.subscriptions.list({ customer: customerId, status: "all", limit: 50 });
+      existingPlatformSubs.push(...list.data.filter(isPlatformSub));
     }
 
-    const allSubs = await stripe.subscriptions.list({
-      customer: customerId,
-      status: "all",
-      limit: 50,
-    });
-    const platformSubs = allSubs.data.filter(isPlatformSub);
-
-    if (platformSubs.length === 0) {
-      return NextResponse.json(
-        { error: "NO_EXISTING_SUBSCRIPTION", message: "No active Stripe subscription found — start with a fresh Checkout." },
-        { status: 404 },
-      );
-    }
-
-    // Pick the keeper: prefer the cached subId if it's still in the active
-    // platform-sub list; otherwise the newest one.
-    const cachedId = userData.platformPlanStripeSubId as string | undefined;
-    const keeper = (cachedId && platformSubs.find((s) => s.id === cachedId))
-      || platformSubs.slice().sort((a, b) => (b.created ?? 0) - (a.created ?? 0))[0];
-    const dupes = platformSubs.filter((s) => s.id !== keeper.id);
-
-    // Cancel the duplicates first. We use cancel (immediate) instead of
-    // schedule-cancel-at-period-end so the billing portal stops listing
-    // them right away. Any prorated remaining-time refund is handled by
-    // Stripe automatically.
-    const cancelledIds: string[] = [];
-    for (const d of dupes) {
-      try {
-        await stripe.subscriptions.cancel(d.id, { prorate: true });
-        cancelledIds.push(d.id);
-      } catch (e: any) {
-        console.error(`[change-plan] failed to cancel duplicate sub ${d.id}:`, e?.message ?? e);
+    // ── Earnings path ────────────────────────────────────────────────────
+    if (method === "earnings") {
+      const feeCents = PLAN_MONTHLY_FEE_CENTS[plan] ?? 0;
+      const earnings = (userData.totalEarnings ?? 0) as number;
+      if (earnings < feeCents) {
+        return NextResponse.json(
+          {
+            error: "INSUFFICIENT_EARNINGS",
+            owedCents: feeCents - earnings,
+            availableCents: earnings,
+            requiredCents: feeCents,
+          },
+          { status: 402 },
+        );
       }
-    }
 
-    const currentItem = keeper.items.data[0];
-    const currentPriceId = currentItem.price.id;
+      // Pick a keeper to swap (if any) so we don't double up. Otherwise
+      // we just track the plan change locally — Stripe doesn't need a
+      // subscription if the user is paying with earnings.
+      const keeper = existingPlatformSubs[0];
+      const dupes = existingPlatformSubs.slice(1);
 
-    if (currentPriceId === targetPriceId) {
-      // Keeper is already on the requested tier — no swap needed, just
-      // make sure our cached state reflects reality and the duplicates
-      // get reported.
-      await userRef.set(
-        {
-          platformPlan: plan,
-          platformPlanStripeSubId: keeper.id,
-          stripeCustomerId: customerId,
-          updatedAt: FieldValue.serverTimestamp(),
-        },
-        { merge: true },
-      );
+      if (keeper) {
+        await stripe.subscriptions.update(keeper.id, {
+          items: [{ id: keeper.items.data[0].id, price: targetPriceId }],
+          proration_behavior: "none",
+          metadata: { uid, plan, paid_from: "earnings" },
+        });
+      }
+
+      // Cancel dupes (and any sub we didn't keep) so the portal stays clean.
+      for (const d of dupes) {
+        try { await stripe.subscriptions.cancel(d.id, { prorate: false }); } catch (e: any) {
+          console.error(`[change-plan] failed to cancel dupe ${d.id}:`, e?.message ?? e);
+        }
+      }
+
+      await userRef.set({
+        platformPlan: plan,
+        platformPlanStripeSubId: keeper?.id ?? `earnings:${plan}`,
+        totalEarnings: FieldValue.increment(-feeCents),
+        lastPlanFeeChargedAt: FieldValue.serverTimestamp(),
+        paymentDue: false,
+        paymentDueCents: 0,
+        updatedAt: FieldValue.serverTimestamp(),
+      }, { merge: true });
+
       return NextResponse.json({
         ok: true,
         plan,
-        subId: keeper.id,
-        alreadyOnPlan: true,
-        cancelledDuplicates: cancelledIds,
+        method: "earnings",
+        deductedCents: feeCents,
+        remainingEarningsCents: earnings - feeCents,
       });
     }
 
-    // Swap the price on the existing subscription. Proration creates a
-    // single upcoming invoice line for the difference; no second
-    // subscription gets created. Stripe re-uses the customer's existing
-    // default payment method, so no Checkout redirect is needed.
-    const updated = await stripe.subscriptions.update(keeper.id, {
-      items: [{ id: currentItem.id, price: targetPriceId }],
-      proration_behavior: "always_invoice",
-      metadata: { uid, plan },
-    });
+    // ── Card path ────────────────────────────────────────────────────────
+    // Cancel every existing platform sub with prorate:false (no refund
+    // credit queued — that was what produced the $0 invoices) and start
+    // a fresh Checkout for the target plan at its full advertised price.
+    const cancelledIds: string[] = [];
+    for (const s of existingPlatformSubs) {
+      try {
+        await stripe.subscriptions.cancel(s.id, { prorate: false });
+        cancelledIds.push(s.id);
+      } catch (e: any) {
+        console.error(`[change-plan] failed to cancel ${s.id}:`, e?.message ?? e);
+      }
+    }
 
-    await userRef.set(
-      {
-        platformPlan: plan,
-        platformPlanStripeSubId: updated.id,
-        stripeCustomerId: customerId,
-        updatedAt: FieldValue.serverTimestamp(),
-      },
-      { merge: true },
-    );
+    // Reset the locally-cached plan immediately so a refresh during the
+    // Checkout flow doesn't show stale state.
+    await userRef.set({
+      platformPlan: "free",
+      platformPlanStripeSubId: null,
+      updatedAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
+
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? process.env.NEXT_PUBLIC_BASE_URL ?? "";
+    const session = await stripe.checkout.sessions.create({
+      mode: "subscription",
+      line_items: [{ price: targetPriceId, quantity: 1 }],
+      customer: customerId,
+      customer_email: customerId ? undefined : email,
+      success_url: `${appUrl}/upgrade?plan_activated=${plan}`,
+      cancel_url: `${appUrl}/upgrade?plan_cancelled=true`,
+      metadata: { uid, plan, paid_from: "card" },
+      subscription_data: { metadata: { uid, plan } },
+    });
 
     return NextResponse.json({
       ok: true,
-      plan,
-      subId: updated.id,
+      method: "card",
+      checkoutUrl: session.url,
       cancelledDuplicates: cancelledIds,
     });
   } catch (err: any) {

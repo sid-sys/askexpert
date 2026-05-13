@@ -143,43 +143,67 @@ export default function UpgradePage() {
     }
   };
 
-  // Swap the price on the user's existing subscription instead of creating
-  // a new one. Used when moving creator <-> pro so we don't end up with two
-  // parallel platform subscriptions in Stripe (the bug behind the duplicate
-  // "AskExpert Creator Plan" rows the user saw in the billing portal).
-  //
-  // We DON'T re-route through Stripe Checkout for this case — Stripe will
-  // charge the customer's existing default payment method and prorate the
-  // difference. We surface a confirmation modal first so the user isn't
-  // surprised by a silent charge.
+  // Plan change for paying users. Two explicit payment paths so the price
+  // is never $0 (no Stripe proration trickery):
+  //   - "card":     cancel the current sub (no proration), launch a fresh
+  //                 Stripe Checkout for the new plan at its full price.
+  //   - "earnings": deduct the new plan's monthly fee from the creator's
+  //                 accrued totalEarnings. Falls back to "card" if the
+  //                 server reports INSUFFICIENT_EARNINGS.
   const handleChangePlan = async (plan: "creator" | "pro") => {
     if (!user) return;
 
     const target = plan === "pro"
-      ? { name: "Pro",     price: "$9.99/month", fee: "0%" }
-      : { name: "Creator", price: "$4.99/month", fee: "5%" };
+      ? { name: "Pro",     price: "$9.99", fee: "0%" }
+      : { name: "Creator", price: "$4.99", fee: "5%" };
     const currentLabel = PLAN_LABEL[platformPlan] ?? "your current plan";
     const isUp = (platformPlan === "free")
       || (platformPlan === "creator" && plan === "pro");
 
-    const confirm = await Swal.fire({
+    const earningsCents = ((userProfile as any)?.totalEarnings ?? 0) as number;
+    const feeCents = plan === "pro" ? 999 : 499;
+    const canUseEarnings = earningsCents >= feeCents;
+    const earningsLabel = `$${(earningsCents / 100).toFixed(2)}`;
+
+    // SweetAlert2 returns "isConfirmed" for the primary action and
+    // "isDenied" for the secondary action (which we use as
+    // "pay from earnings"). isDismissed = user cancelled.
+    const choice = await Swal.fire({
       icon: "question",
-      title: `${isUp ? "Upgrade" : "Downgrade"} to ${target.name}?`,
+      title: `${isUp ? "Upgrade" : "Switch"} to ${target.name}?`,
       html: `
         <div style="text-align:left; font-size:0.92rem; line-height:1.55;">
-          Switching from <strong>${currentLabel}</strong> to <strong>${target.name}</strong> (${target.price}, ${target.fee} platform fee).<br/><br/>
-          We'll <strong>charge your card on file</strong> for the prorated difference on your next invoice — Stripe handles the math automatically.
-          If you have duplicate plan subscriptions from earlier upgrades, they'll be cancelled automatically too.
+          Switching from <strong>${currentLabel}</strong> to <strong>${target.name}</strong> — ${target.price}/month, ${target.fee} platform fee.<br/><br/>
+          <strong>How would you like to pay?</strong><br/>
+          <span style="color:#6b7280; font-size:0.85rem;">
+            Card opens Stripe Checkout for ${target.price} today.<br/>
+            Earnings deducts ${target.price} from your accrued balance (currently <strong>${earningsLabel}</strong>)
+            ${canUseEarnings ? "" : " — not enough to cover this plan."}.
+          </span>
         </div>
       `,
+      showDenyButton: true,
       showCancelButton: true,
-      confirmButtonText: `Yes, switch to ${target.name}`,
+      confirmButtonText: `Pay with card (${target.price})`,
+      denyButtonText: canUseEarnings ? `Use earnings (${target.price})` : `Earnings (${earningsLabel} — short)`,
       cancelButtonText: "Not now",
       confirmButtonColor: "#7c3aed",
+      denyButtonColor: canUseEarnings ? "#10b981" : "#9ca3af",
       cancelButtonColor: "#6b7280",
       reverseButtons: true,
     });
-    if (!confirm.isConfirmed) return;
+    if (choice.isDismissed) return;
+
+    const method: "card" | "earnings" = choice.isDenied ? "earnings" : "card";
+    if (method === "earnings" && !canUseEarnings) {
+      await Swal.fire({
+        icon: "warning",
+        title: "Not enough earnings",
+        html: `Your accrued earnings (${earningsLabel}) can't cover ${target.price}.<br/>Pay with card instead or earn more first.`,
+        confirmButtonColor: "#7c3aed",
+      });
+      return;
+    }
 
     setBusyPlan(plan);
     try {
@@ -188,40 +212,48 @@ export default function UpgradePage() {
       const res = await fetch("/api/stripe/change-plan", {
         method: "POST",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ plan }),
+        body: JSON.stringify({ plan, method }),
       });
       const data = await res.json();
-      if (res.status === 404 && data?.error === "NO_EXISTING_SUBSCRIPTION") {
-        // No active sub on file (e.g. local state stale). Fall back to a
-        // fresh Checkout so the user can subscribe cleanly.
-        await handleStartCheckout(plan);
+
+      if (res.status === 402 && data?.error === "INSUFFICIENT_EARNINGS") {
+        await Swal.fire({
+          icon: "warning",
+          title: "Not enough earnings",
+          html: `You need ${target.price} but only have $${((data.availableCents ?? 0) / 100).toFixed(2)} in accrued earnings. Try paying with card.`,
+          confirmButtonColor: "#7c3aed",
+        });
         return;
       }
       if (!res.ok) throw new Error(data.error || "Could not change plan");
 
-      const cancelled = (data?.cancelledDuplicates ?? []).length;
+      if (data.method === "card" && data.checkoutUrl) {
+        // Full-page redirect to Stripe Checkout — Stripe will charge the
+        // full plan price and our webhook will flip platformPlan on success.
+        window.location.href = data.checkoutUrl;
+        return;
+      }
+
+      // Earnings path succeeded server-side. Confirm with a toast + refresh.
       await Swal.fire({
         icon: "success",
-        title: `You're on ${target.name} now! 🎉`,
+        title: `You're on ${target.name}! 🎉`,
         html: `
           <div style="font-size:0.92rem; line-height:1.5;">
-            Stripe prorated the difference on your next invoice.
-            ${cancelled > 0 ? `<br/><br/><strong>${cancelled}</strong> duplicate subscription${cancelled === 1 ? "" : "s"} cleaned up automatically.` : ""}
+            <strong>${target.price}</strong> was deducted from your earnings.
+            Remaining balance: <strong>$${((data.remainingEarningsCents ?? 0) / 100).toFixed(2)}</strong>.
           </div>
         `,
         confirmButtonColor: "#7c3aed",
         timer: 4500,
         timerProgressBar: true,
       });
-
-      // Pull the latest state from Stripe so the badge / cards reflect
-      // the new tier without a manual refresh.
       try {
         await fetch("/api/stripe/sync-plan", {
           method: "POST",
           headers: { Authorization: `Bearer ${token}` },
         });
-      } catch { /* swallow — webhook will reconcile */ }
+      } catch { /* webhook will reconcile */ }
     } catch (err: any) {
       alert(err.message || "Could not change plan. Try again.");
     } finally {
