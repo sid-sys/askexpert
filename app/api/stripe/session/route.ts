@@ -57,12 +57,19 @@ export async function GET(req: NextRequest) {
           }
 
           // Count the subscription payment toward creator earnings + pending payouts.
+          // Same cumulative split as the webhook: gross + net + platform fee
+          // accumulated at the fee tier active at payment time.
           const grossCents = parseInt(meta.pricePaid ?? "0");
           if (grossCents > 0) {
+            const subFeePct  = parseFloat(meta.feePercent ?? "15");
+            const subFeeCts  = Math.round(grossCents * (subFeePct / 100));
+            const subNetCts  = grossCents - subFeeCts;
             await adminDb.collection("users").doc(meta.creatorId).set(
               {
-                totalEarnings: FieldValue.increment(grossCents),
-                updatedAt: FieldValue.serverTimestamp(),
+                totalEarnings:    FieldValue.increment(grossCents),
+                totalCreatorNet:  FieldValue.increment(subNetCts),
+                totalPlatformFee: FieldValue.increment(subFeeCts),
+                updatedAt:        FieldValue.serverTimestamp(),
               },
               { merge: true }
             );
@@ -154,14 +161,24 @@ export async function GET(req: NextRequest) {
             attachmentUrls,
           });
 
-          // Also increment creator total earnings if it's a new question
-          await adminDb.collection("users").doc(creatorId).set(
-            { 
-              totalEarnings: FieldValue.increment(parseInt(pricePaid)),
-              updatedAt: FieldValue.serverTimestamp()
-            },
-            { merge: true }
-          );
+          // Also increment creator total earnings + net + platform fee
+          // (computed at the fee tier active at payment time so the cached
+          // totals stay correct across plan upgrades).
+          {
+            const grossAtPay = parseInt(pricePaid);
+            const feePctAtPay = parseFloat(feePercent ?? "15");
+            const feeAtPay = Math.round(grossAtPay * (feePctAtPay / 100));
+            const netAtPay = grossAtPay - feeAtPay;
+            await adminDb.collection("users").doc(creatorId).set(
+              {
+                totalEarnings:    FieldValue.increment(grossAtPay),
+                totalCreatorNet:  FieldValue.increment(netAtPay),
+                totalPlatformFee: FieldValue.increment(feeAtPay),
+                updatedAt:        FieldValue.serverTimestamp(),
+              },
+              { merge: true }
+            );
+          }
 
           // If manual bank, add to pending payouts
           if (payoutMethod === "manual_bank") {

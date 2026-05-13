@@ -155,6 +155,7 @@ export default function PayoutTab({
         <p style={{ color: "var(--text-muted)", fontSize: "0.9rem", marginBottom: 18 }}>
           You're on the <strong>{planLabel}</strong> plan — current platform fee is
           {" "}<strong style={{ color: feePercent === 0 ? "#10b981" : feePercent <= 5 ? "#7c3aed" : "#f59e0b" }}>{feePercent}% per transaction</strong>.
+          {" "}Lifetime totals below sum each payment at the fee tier active at the time.
         </p>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 14 }}>
           <div style={{ background: "#fff", border: "2px solid var(--border)", borderRadius: 14, padding: 16 }}>
@@ -162,11 +163,11 @@ export default function PayoutTab({
             <div style={{ fontFamily: "var(--font-main)", fontWeight: 900, fontSize: "1.6rem", color: "var(--text-dark)", marginTop: 4 }}>{formatCents(totalEarnings)}</div>
           </div>
           <div style={{ background: "#fff", border: "2px solid var(--border)", borderRadius: 14, padding: 16 }}>
-            <div style={{ fontSize: "0.72rem", color: "var(--text-muted)", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em" }}>Your Net ({100 - feePercent}%)</div>
+            <div style={{ fontSize: "0.72rem", color: "var(--text-muted)", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em" }}>Your Net</div>
             <div style={{ fontFamily: "var(--font-main)", fontWeight: 900, fontSize: "1.6rem", color: "#10b981", marginTop: 4 }}>{formatCents(creatorNetCents)}</div>
           </div>
           <div style={{ background: "#fff", border: "2px solid var(--border)", borderRadius: 14, padding: 16 }}>
-            <div style={{ fontSize: "0.72rem", color: "var(--text-muted)", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em" }}>Platform Fee ({feePercent}%)</div>
+            <div style={{ fontSize: "0.72rem", color: "var(--text-muted)", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em" }}>Platform Fee</div>
             <div style={{ fontFamily: "var(--font-main)", fontWeight: 900, fontSize: "1.6rem", color: "#f59e0b", marginTop: 4 }}>{formatCents(platformCutCents)}</div>
           </div>
         </div>

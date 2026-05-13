@@ -61,6 +61,12 @@ export default function NavBar() {
   // viewport without competing with a horizontal nav above.
   if (pathname?.startsWith("/fans") || pathname?.startsWith("/fan-dashboard") || pathname?.startsWith("/questions")) return null;
 
+  // Authenticated users on app routes already see the AskExpert wordmark in
+  // the sidebar header. We still want the top-right actions (View Profile,
+  // Copy Link, Dashboard), but the duplicate logo should be hidden.
+  const sidebarRoutes = ["/dashboard", "/profile", "/analytics", "/admin", "/upgrade"];
+  const hideLogo = !!user && sidebarRoutes.some(r => pathname?.startsWith(r));
+
 
   const isActive = (path: string) => {
     if (path === "/" && pathname === "/") return true;
@@ -85,30 +91,37 @@ export default function NavBar() {
       transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
       backdropFilter: "blur(12px)",
     }}>
-      {/* LOGO */}
-      <Link href="/" style={{ textDecoration: "none" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
-          <div style={{
-            background: "linear-gradient(135deg, #7c3aed, #a855f7)",
-            color: "#fff",
-            borderRadius: "10px",
-            width: 36,
-            height: 36,
-            display: "grid",
-            placeItems: "center",
-            fontSize: "1.1rem",
-            fontWeight: 900,
-            boxShadow: "0 4px 12px rgba(124,58,237,0.3)",
-          }}>A</div>
-          <span style={{
-            fontFamily: "'Outfit', sans-serif",
-            fontSize: "1.5rem",
-            fontWeight: 800,
-            color: "#1f2937",
-            letterSpacing: "-0.02em",
-          }}>AskExpert</span>
-        </div>
-      </Link>
+      {/* LOGO — suppressed on app routes where the sidebar already shows it */}
+      {!hideLogo ? (
+        <Link href="/" style={{ textDecoration: "none" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
+            <div style={{
+              background: "linear-gradient(135deg, #7c3aed, #a855f7)",
+              color: "#fff",
+              borderRadius: "10px",
+              width: 36,
+              height: 36,
+              display: "grid",
+              placeItems: "center",
+              fontSize: "1.1rem",
+              fontWeight: 900,
+              boxShadow: "0 4px 12px rgba(124,58,237,0.3)",
+            }}>A</div>
+            <span style={{
+              fontFamily: "'Outfit', sans-serif",
+              fontSize: "1.5rem",
+              fontWeight: 800,
+              color: "#1f2937",
+              letterSpacing: "-0.02em",
+            }}>AskExpert</span>
+          </div>
+        </Link>
+      ) : (
+        // Spacer so the top-right actions stay flush right when the logo
+        // is hidden. The header uses space-between, so we need something
+        // here to push them.
+        <span />
+      )}
 
       {/* DESKTOP NAV / AUTH NAV */}
       <nav style={{ display: "flex", alignItems: "center", gap: "1rem" }}

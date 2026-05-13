@@ -267,7 +267,7 @@ export default function FanDashboardPage() {
         onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = "rgba(167,139,250,0.14)"; }}
         onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = activeNav === "settings" ? "rgba(167,139,250,0.14)" : "rgba(167,139,250,0.05)"; }}
       >
-        <div style={{ width: 34, height: 34, borderRadius: "50%", background: "linear-gradient(135deg,#7c3aed,#a855f7)", color: "#fff", display: "grid", placeItems: "center", fontFamily: "'Outfit',sans-serif", fontSize: "0.85rem", fontWeight: 800, flexShrink: 0 }}>
+        <div style={{ width: 34, height: 34, borderRadius: "50%", background: "linear-gradient(135deg,#f59e0b,#fbbf24)", color: "#fff", display: "grid", placeItems: "center", fontFamily: "'Outfit',sans-serif", fontSize: "0.85rem", fontWeight: 800, flexShrink: 0, boxShadow: "0 2px 8px rgba(245,158,11,0.35)" }}>
           {initial}
         </div>
         <div style={{ minWidth: 0, flex: 1 }}>
@@ -411,11 +411,10 @@ export default function FanDashboardPage() {
         <main className="fan-main">
           <header className="fan-topbar">
             <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+              {/* AskExpert wordmark removed — already rendered in the sidebar
+                  header. The hamburger stays so mobile users can still open
+                  the drawer. */}
               <button className="fan-hamburger" onClick={() => setMobileOpen(!mobileOpen)} aria-label="Menu">☰</button>
-              <a href="/" style={{ display: "flex", alignItems: "center", gap: 9, textDecoration: "none" }}>
-                <div style={{ background: "linear-gradient(135deg,#a78bfa,#7c3aed)", borderRadius: 9, width: 30, height: 30, display: "grid", placeItems: "center", fontFamily: "'Outfit',sans-serif", fontWeight: 900, color: "#fff", fontSize: "0.9rem", boxShadow: "0 3px 10px rgba(124,58,237,0.35)", flexShrink: 0 }}>A</div>
-                <span style={{ fontFamily: "'Outfit',sans-serif", fontWeight: 800, fontSize: "1rem", color: "#111", letterSpacing: "-0.02em" }}>AskExpert</span>
-              </a>
             </div>
             <div style={{ display: "flex", gap: 10 }}>
               {username && (

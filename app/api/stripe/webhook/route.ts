@@ -115,10 +115,21 @@ export async function POST(req: NextRequest) {
         // ── Count the subscription payment toward creator earnings ──────────
         // (Mirrors the one-time question flow so subscriptions affect the
         // creator's payout threshold and pendingPayoutBalance.)
+        //
+        // The fee tier active at the time of this payment is captured in
+        // meta.feePercent at Checkout creation time. We accumulate the
+        // creator's net + platform's cut as separate cumulative counters
+        // so the payout-page breakdown stays accurate even after the
+        // creator upgrades to a lower-fee tier later.
         const grossCents = parseInt(pricePaid);
+        const subFeePercent = parseFloat(meta.feePercent ?? "15");
+        const subFeeCents = Math.round(grossCents * (subFeePercent / 100));
+        const subNetCents = grossCents - subFeeCents;
         await adminDb.collection("users").doc(creatorId).set(
           {
             totalEarnings: FieldValue.increment(grossCents),
+            totalCreatorNet: FieldValue.increment(subNetCents),
+            totalPlatformFee: FieldValue.increment(subFeeCents),
             updatedAt: FieldValue.serverTimestamp(),
           },
           { merge: true }
@@ -279,15 +290,28 @@ export async function POST(req: NextRequest) {
         attachmentUrls,
       });
 
-      // ── Increment creator gross earnings ──────────────────────────────────
+      // ── Increment creator earnings counters ───────────────────────────────
+      // Accumulate gross, the creator's net, and the platform's cut as three
+      // separate cumulative fields. Computing them at payment time using the
+      // fee % active right then (meta.feePercent) means we don't have to
+      // re-derive the breakdown later — and the totals stay accurate even
+      // after the creator changes plan tiers.
       console.log(`[Webhook] Step 2: Incrementing creator earnings for ${creatorId}...`);
-      await adminDb.collection("users").doc(creatorId).set(
-        { 
-          totalEarnings: FieldValue.increment(parseInt(pricePaid)),
-          updatedAt: FieldValue.serverTimestamp()
-        },
-        { merge: true }
-      );
+      {
+        const grossCentsAtPay = parseInt(pricePaid);
+        const feePctAtPay     = parseFloat(feePercent ?? "15");
+        const feeCentsAtPay   = Math.round(grossCentsAtPay * (feePctAtPay / 100));
+        const netCentsAtPay   = grossCentsAtPay - feeCentsAtPay;
+        await adminDb.collection("users").doc(creatorId).set(
+          {
+            totalEarnings:    FieldValue.increment(grossCentsAtPay),
+            totalCreatorNet:  FieldValue.increment(netCentsAtPay),
+            totalPlatformFee: FieldValue.increment(feeCentsAtPay),
+            updatedAt:        FieldValue.serverTimestamp(),
+          },
+          { merge: true }
+        );
+      }
 
       // ── If manual bank: write pendingPayout record ────────────────────────
       if (payoutMethod === "manual_bank") {

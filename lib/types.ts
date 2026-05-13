@@ -63,6 +63,12 @@ export interface FirestoreUser {
 
   // ── Earnings ─────────────────────────────────────────────────────────────
   totalEarnings?: number;                // in cents, lifetime gross
+  // Cumulative split of totalEarnings. Each payment increments these at the
+  // fee tier active right then, so the breakdown stays accurate even when
+  // the creator changes plan tiers later. Fall back to a current-tier
+  // estimate when these are missing (older docs).
+  totalCreatorNet?: number;              // cents creator earned after fee
+  totalPlatformFee?: number;             // cents kept by the platform
 
   // ── Auto-upgrade billing (paid out of accrued earnings) ──────────────────
   // When the creator exceeds their plan's monthly cap and we auto-upgrade

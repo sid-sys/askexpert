@@ -386,26 +386,9 @@ export default function Sidebar() {
       {/* Footer */}
       <div style={{ ...css.footer, position: "relative" }}>
         
-        {/* UPGRADE PLAN LINK — label adapts to current plan so it doesn't tell
-            paying users to "Upgrade" when they're already paying. */}
-        {userProfile && (() => {
-          const planKey = ((userProfile as any).platformPlan ?? "free") as "free" | "creator" | "pro";
-          const label = planKey === "free" ? "Upgrade Plan" : planKey === "pro" ? "Manage Plan" : "Manage Plan";
-          const icon  = planKey === "free" ? "🚀" : "⚙️";
-          return (
-          <Link href="/upgrade" data-plan={planKey} style={{
-            display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-            background: planKey === "free" ? "linear-gradient(135deg, #f59e0b, #fbbf24)" : "linear-gradient(135deg, #7c3aed, #a855f7)",
-            color: "#fff",
-            padding: isCollapsed ? "10px" : "12px", borderRadius: 12,
-            textDecoration: "none", fontWeight: 800, marginBottom: 16,
-            boxShadow: planKey === "free" ? "0 4px 14px rgba(245,158,11,0.3)" : "0 4px 14px rgba(124,58,237,0.3)",
-            fontSize: isCollapsed ? "1.2rem" : "0.95rem"
-          }}>
-            {icon} {!isCollapsed && label}
-          </Link>
-          );
-        })()}
+        {/* The standalone Upgrade / Manage Plan CTA was removed. The plan
+            badge under the user info row in the sidebar footer is now the
+            single tappable surface that routes to /upgrade. */}
 
         {/* Creator / Fan toggle */}
         {!isCollapsed && (

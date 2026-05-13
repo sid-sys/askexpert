@@ -197,11 +197,20 @@ function SettingsContent() {
     return () => { stale = true; };
   }, [tab, user]);
 
-  // Earnings breakdown derived from lifetime gross (totalEarnings) at the
-  // creator's current fee tier. These are what the UI surfaces in the new
-  // payout breakdown card.
-  const platformCutCents = Math.round((totalEarnings * feePercent) / 100);
-  const creatorNetCents  = totalEarnings - platformCutCents;
+  // Earnings breakdown. Prefer the cumulative counters that the webhook +
+  // session route now write (incremented at the fee tier active at each
+  // payment), and fall back to a current-tier estimate if the creator's
+  // user doc predates those fields. This keeps the breakdown correct after
+  // plan upgrades — e.g. $100 earned on free (15% fee) plus $100 earned on
+  // creator (5% fee) renders as $180 net + $20 platform fee.
+  const cachedNet = (userProfile as any)?.totalCreatorNet  as number | undefined;
+  const cachedFee = (userProfile as any)?.totalPlatformFee as number | undefined;
+  const platformCutCents = typeof cachedFee === "number"
+    ? cachedFee
+    : Math.round((totalEarnings * feePercent) / 100);
+  const creatorNetCents  = typeof cachedNet === "number"
+    ? cachedNet
+    : totalEarnings - platformCutCents;
 
   const paymentDue        = !!(userProfile as any)?.paymentDue;
   const paymentDueCents   = ((userProfile as any)?.paymentDueCents ?? 0) as number;
