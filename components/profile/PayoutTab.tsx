@@ -249,11 +249,46 @@ export default function PayoutTab({
         </div>
       </div>
 
+      {/* PAYOUT METHOD LOCK BANNER — shown only while the creator is below
+          the $50 payout threshold. Sits above the chooser so the reason is
+          obvious before the disabled state is encountered. */}
+      {!payoutUnlocked && (
+        <div style={{
+          background: "linear-gradient(135deg, #fef3c7, #fff)",
+          border: "2px solid #fbbf24", borderRadius: 16, padding: "16px 22px",
+          display: "flex", gap: 14, alignItems: "flex-start",
+        }}>
+          <span style={{ fontSize: "1.5rem" }}>🔒</span>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontFamily: "var(--font-main)", fontWeight: 900, color: "#92400e", fontSize: "1rem", marginBottom: 4 }}>
+              Payout method locked
+            </div>
+            <div style={{ color: "#78350f", fontSize: "0.88rem", lineHeight: 1.55 }}>
+              Reach <strong>$50.00</strong> in cleared earnings to unlock payout setup.
+              You&apos;ve cleared <strong>{earningsFormatted}</strong> so far —
+              <strong> {formatCents(Math.max(0, 5000 - totalEarnings))}</strong> to go.
+              Your earnings keep accruing in the meantime and will pay out the moment you cross the threshold.
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* PAYOUT METHOD CHOOSER */}
-      <div className={`card-brutal ${payoutUnlocked ? "card-brutal-green" : ""}`}>
+      <div
+        className={`card-brutal ${payoutUnlocked ? "card-brutal-green" : ""}`}
+        // When the creator hasn't crossed the $50 payout threshold we lock
+        // this whole section. Locking is visual + behavioural: pointer-events
+        // off prevents clicks anywhere inside the card (chooser buttons,
+        // method-specific config, the Stripe setup CTA), opacity dims it, and
+        // a banner above explains *why* with the exact gap remaining.
+        style={!payoutUnlocked ? { position: "relative", opacity: 0.55, pointerEvents: "none", filter: "saturate(0.6)" } : undefined}
+        aria-disabled={!payoutUnlocked}
+      >
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
           <div style={{ background: payoutUnlocked ? "rgba(16,185,129,0.1)" : "var(--bg-soft)", color: payoutUnlocked ? "var(--green)" : "var(--text-dark)", width: 40, height: 40, borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.2rem", border: `2px solid ${payoutUnlocked ? "rgba(16,185,129,0.3)" : "var(--border)"}` }}>💳</div>
-          <h2 className="font-display" style={{ fontSize: "1.8rem", color: payoutUnlocked ? "var(--green)" : "var(--text-dark)", margin: 0 }}>Payout Method</h2>
+          <h2 className="font-display" style={{ fontSize: "1.8rem", color: payoutUnlocked ? "var(--green)" : "var(--text-dark)", margin: 0 }}>
+            Payout Method {!payoutUnlocked && <span style={{ fontSize: "1rem", marginLeft: 8 }}>🔒</span>}
+          </h2>
         </div>
         <p style={{ color: "var(--text-dark)", fontSize: "0.95rem", marginBottom: 24, fontWeight: 500 }}>
           Choose how you receive your earnings. We recommend Stripe Connect for automated, fast transfers.
@@ -263,12 +298,14 @@ export default function PayoutTab({
           <button
             onClick={() => setPayoutMethod("stripe_connect")}
             style={chipStyle(payoutMethod === "stripe_connect", "purple")}
+            disabled={!payoutUnlocked}
           >
             ⚡ Stripe Connect (Auto)
           </button>
           <button
             onClick={() => setPayoutMethod(payoutMethod === "stripe_connect" ? "paypal" : payoutMethod)}
             style={chipStyle(payoutMethod !== "stripe_connect", "green")}
+            disabled={!payoutUnlocked}
           >
             🏦 Manual Transfer (Global)
           </button>
@@ -343,7 +380,7 @@ export default function PayoutTab({
             <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
               <div style={{ padding: "14px 20px", background: "rgba(124,58,237,0.1)", border: "2px solid var(--purple)", borderRadius: 12, fontSize: "0.95rem", color: "var(--purple)", fontWeight: 600, display: "flex", gap: 12, alignItems: "flex-start" }}>
                 <span style={{ fontSize: "1.2rem" }}>💡</span>
-                <span>Ideal for India (IMPS/NEFT) and regions with direct local transfers. Admin will transfer your earnings monthly.</span>
+                <span>Ideal for India (IMPS/NEFT) and regions with direct local transfers. Payouts are processed monthly.</span>
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 20 }}>
                 <div>
@@ -363,7 +400,6 @@ export default function PayoutTab({
                   <input className="input-brutal" value={ifscCode} onChange={e => setIfscCode(e.target.value)} placeholder="e.g. HDFC0001234" />
                 </div>
               </div>
-              <p style={{ color: "var(--green)", fontSize: "0.85rem", marginTop: 4, fontWeight: 600 }}>🔐 Details are encrypted at rest. Only admins can see them for processing payouts.</p>
             </div>
           )}
 
@@ -371,7 +407,7 @@ export default function PayoutTab({
             <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
               <div style={{ padding: "14px 20px", background: "rgba(249,115,22,0.1)", border: "2px solid var(--orange)", borderRadius: 12, fontSize: "0.95rem", color: "#c2410c", fontWeight: 600, display: "flex", gap: 12, alignItems: "flex-start" }}>
                 <span style={{ fontSize: "1.2rem" }}>🌍</span>
-                <span>Ideal for international wire transfers (SWIFT/BIC). High bank fees may apply. Admin transfers monthly.</span>
+                <span>Ideal for international wire transfers (SWIFT/BIC). High bank fees may apply. Payouts are processed monthly.</span>
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 20 }}>
                 <div style={{ gridColumn: "1 / -1" }}>
@@ -395,7 +431,6 @@ export default function PayoutTab({
                   <input className="input-brutal" value={swiftCode} onChange={e => setSwiftCode(e.target.value)} placeholder="e.g. HDFCINBB" />
                 </div>
               </div>
-              <p style={{ color: "var(--green)", fontSize: "0.85rem", marginTop: 4, fontWeight: 600 }}>🔐 Details are encrypted at rest. Only admins can see them for processing payouts.</p>
             </div>
           )}
 
@@ -403,13 +438,12 @@ export default function PayoutTab({
             <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
               <div style={{ padding: "14px 20px", background: "rgba(59,130,246,0.1)", border: "2px solid #3b82f6", borderRadius: 12, fontSize: "0.95rem", color: "#1d4ed8", fontWeight: 600, display: "flex", gap: 12, alignItems: "flex-start" }}>
                 <span style={{ fontSize: "1.2rem" }}>💙</span>
-                <span>Receive payouts directly to your PayPal account. Standard PayPal receiving fees may apply. Admin transfers monthly.</span>
+                <span>Receive payouts directly to your PayPal account. Standard PayPal receiving fees may apply. Payouts are processed monthly.</span>
               </div>
               <div>
                 <label style={labelStyle}>PayPal Email Address</label>
                 <input className="input-brutal" value={paypalEmail} onChange={e => setPaypalEmail(e.target.value)} placeholder="paypal@email.com" type="email" style={{ maxWidth: 400 }} />
               </div>
-              <p style={{ color: "var(--green)", fontSize: "0.85rem", marginTop: 4, fontWeight: 600 }}>🔐 Details are encrypted at rest. Only admins can see them for processing payouts.</p>
             </div>
           )}
 
@@ -417,13 +451,12 @@ export default function PayoutTab({
             <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
               <div style={{ padding: "14px 20px", background: "rgba(16,185,129,0.1)", border: "2px solid var(--green)", borderRadius: 12, fontSize: "0.95rem", color: "var(--green)", fontWeight: 600, display: "flex", gap: 12, alignItems: "flex-start" }}>
                 <span style={{ fontSize: "1.2rem" }}>🟢</span>
-                <span>Receive payouts directly to your Wise account using your Wise email. Low fees. Admin transfers monthly.</span>
+                <span>Receive payouts directly to your Wise account using your Wise email. Low fees. Payouts are processed monthly.</span>
               </div>
               <div>
                 <label style={labelStyle}>Wise Email Address</label>
                 <input className="input-brutal" value={wiseEmail} onChange={e => setWiseEmail(e.target.value)} placeholder="wise@email.com" type="email" style={{ maxWidth: 400 }} />
               </div>
-              <p style={{ color: "var(--green)", fontSize: "0.85rem", marginTop: 4, fontWeight: 600 }}>🔐 Details are encrypted at rest. Only admins can see them for processing payouts.</p>
             </div>
           )}
         </div>

@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
     // ── Creator Plan — $4.99/month + $29.94/year ──────────────────────────
     const creatorProduct = await stripe.products.create({
       name:        "AskExpert Creator Plan",
-      description: "5% platform fee on all transactions. Custom branding & analytics.",
+      description: "10% platform fee on all transactions. Custom branding & analytics.",
       metadata:    { plan: "creator" },
     });
 

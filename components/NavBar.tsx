@@ -95,18 +95,18 @@ export default function NavBar() {
       {!hideLogo ? (
         <Link href="/" style={{ textDecoration: "none" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
-            <div style={{
-              background: "linear-gradient(135deg, #7c3aed, #a855f7)",
-              color: "#fff",
-              borderRadius: "10px",
-              width: 36,
-              height: 36,
-              display: "grid",
-              placeItems: "center",
-              fontSize: "1.1rem",
-              fontWeight: 900,
-              boxShadow: "0 4px 12px rgba(124,58,237,0.3)",
-            }}>A</div>
+            <img
+              src="/logo.png"
+              alt="AskExpert"
+              width={36}
+              height={36}
+              style={{
+                borderRadius: 10,
+                display: "block",
+                boxShadow: "0 4px 12px rgba(124,58,237,0.3)",
+                objectFit: "cover",
+              }}
+            />
             <span style={{
               fontFamily: "'Outfit', sans-serif",
               fontSize: "1.5rem",

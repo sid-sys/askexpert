@@ -29,7 +29,6 @@ export function useProfileSettings() {
   const [currency,  setCurrency]  = useState("usd");
   const [responseTimeHours, setResponseTimeHours] = useState(72);
   const [subscriberPerks,   setSubscriberPerks]   = useState<string[]>([]);
-  const [pppEnabled,       setPppEnabled]        = useState(false);
   const [payoutMethod,  setPayoutMethod]  = useState<"stripe_connect" | "manual_bank">("manual_bank");
   const [vacationMode,  setVacationMode]  = useState(false);
   const [vacationUntil, setVacationUntil] = useState<Date | null>(null);
@@ -87,7 +86,6 @@ export function useProfileSettings() {
     const rawSl = (userProfile as any).socialLinks;
     setSocialLinks(Array.isArray(rawSl) ? rawSl : []);
     setSubscriberPerks((userProfile as any).subscriberPerks || []);
-    setPppEnabled((userProfile as any).pppEnabled ?? false);
     setLastSavedData(JSON.stringify({ vacationMode: (userProfile as any).vacationMode ?? false }));
   }, [userProfile]);
 
@@ -101,13 +99,27 @@ export function useProfileSettings() {
         monthlyPrice:     monthly,
         currency, bio, tagline, displayName, isCreator: true,
         categories, responseTimeHours, subscriberPerks, socialLinks,
-        payoutMethod, pppEnabled, vacationMode, vacationUntil, vacationMessage,
+        payoutMethod, vacationMode, vacationUntil, vacationMessage,
         updatedAt: serverTimestamp(),
       };
-      if (payoutMethod === "manual_bank") {
+      // Persist payout details for every non-Stripe-Connect method. The UI
+      // sets payoutMethod to one of `paypal | wise | local_bank |
+      // international_bank | manual_bank` once the creator picks a manual
+      // option, and each of those modes has its own input fields. The old
+      // condition only matched `"manual_bank"`, which meant data typed in
+      // any other mode was silently dropped on save. We now write the full
+      // bankDetails object regardless — only Stripe Connect (which manages
+      // payout info on Stripe's side) is exempt.
+      if (payoutMethod !== "stripe_connect") {
         updateData.bankDetails = {
-          accountHolderName: accountHolder, accountNumber, bankName,
-          country: bankCountry, ifscCode, swiftCode, paypalEmail, wiseEmail,
+          accountHolderName: accountHolder,
+          accountNumber,
+          bankName,
+          country:    bankCountry,
+          ifscCode,
+          swiftCode,
+          paypalEmail,
+          wiseEmail,
         };
       }
       await updateDoc(doc(db, COLLECTIONS.USERS, user.uid), updateData);
@@ -133,7 +145,7 @@ export function useProfileSettings() {
     }
   }, [
     user, perQ, monthly, currency, bio, tagline, displayName, categories,
-    responseTimeHours, subscriberPerks, socialLinks, payoutMethod, pppEnabled,
+    responseTimeHours, subscriberPerks, socialLinks, payoutMethod,
     vacationMode, vacationUntil, vacationMessage, bankName, accountHolder,
     accountNumber, bankCountry, ifscCode, swiftCode, paypalEmail, wiseEmail, lastSavedData,
   ]);
@@ -205,7 +217,6 @@ export function useProfileSettings() {
     currency, setCurrency,
     responseTimeHours, setResponseTimeHours,
     subscriberPerks, setSubscriberPerks,
-    pppEnabled, setPppEnabled,
     payoutMethod, setPayoutMethod,
     bankName, setBankName,
     accountHolder, setAccountHolder,

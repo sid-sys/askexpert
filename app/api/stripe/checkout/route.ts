@@ -1,11 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { stripe, getPlatformFeePercent, computeApplicationFee, computeCreatorCut } from "@/lib/stripe";
 import { adminDb } from "@/lib/firebase-admin";
-import { applyPPP } from "@/lib/ppp";
 
 export async function POST(req: NextRequest) {
   try {
-    const { creatorId, content, followerEmail, followerName, mode, price, countryCode, attachmentUrls, followerUid } = await req.json();
+    const { creatorId, content, followerEmail, followerName, mode, price, attachmentUrls, followerUid } = await req.json();
 
     if (!creatorId || !followerEmail || !price) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
@@ -30,13 +29,8 @@ export async function POST(req: NextRequest) {
     const currency          = ((creator.currency ?? "usd") as string).toLowerCase();
     const responseTimeHours = (creator.responseTimeHours ?? 72) as number;
     const creatorName       = (creator.displayName       ?? "Creator") as string;
-    const pppEnabled        = (creator.pppEnabled        ?? false) as boolean;
 
-    // ── Apply PPP if enabled ──
-    let finalPrice = price;
-    if (pppEnabled && countryCode) {
-      finalPrice = applyPPP(price, countryCode);
-    }
+    const finalPrice = price;
 
     // ── Decide payout route ───────────────────────────────────────────────────
     const isConnectPayout =
@@ -69,7 +63,6 @@ export async function POST(req: NextRequest) {
       feePercent:   feePercent.toString(),
       creatorCut:   creatorCut.toString(),
       currency,
-      pppApplied:   (finalPrice < price) ? "true" : "false",
       originalPrice: price.toString(),
       responseTimeHours: responseTimeHours.toString(),
     };

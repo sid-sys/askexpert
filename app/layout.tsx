@@ -28,6 +28,14 @@ export const metadata: Metadata = {
     title: "AskExpert – Your Knowledge Has Value",
     description: "Turn your expertise into earnings. Simple Q&A links for creators and experts.",
     type: "website",
+    images: [{ url: "/logo.png", width: 1240, height: 1240, alt: "AskExpert" }],
+  },
+  icons: {
+    icon: [
+      { url: "/logo.png", type: "image/png" },
+    ],
+    shortcut: "/logo.png",
+    apple: "/logo.png",
   },
   manifest: "/manifest.json",
 };

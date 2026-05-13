@@ -5,7 +5,7 @@ import { formatDuration } from "./utils";
 
 export const resend = new Resend(process.env.RESEND_API_KEY);
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
-const FROM = process.env.RESEND_FROM || "AskExpert <noreply@askexpert.ink>";
+const FROM = process.env.RESEND_FROM || "AskExpert <contact@askexpert.ink>";
 
 // ── Audit Helper ─────────────────────────────────────────────────────────────
 async function logNotification(data: {
@@ -36,9 +36,12 @@ function emailWrapper(content: string) {
 <body style="margin:0;padding:0;background:#f9fafb;font-family:'Helvetica Neue',Arial,sans-serif;">
   <div style="max-width:600px;margin:40px auto;background:#fff;border-radius:24px;overflow:hidden;box-shadow:0 4px 40px rgba(0,0,0,0.08);">
     <!-- Header -->
-    <div style="background:#7c3aed;padding:32px 40px;">
-      <div style="font-size:1.5rem;font-weight:900;color:#fff;letter-spacing:-0.5px;">AskExpert</div>
-      <div style="color:rgba(255,255,255,0.75);font-size:0.85rem;margin-top:4px;">Expert answers, delivered.</div>
+    <div style="background:#000;padding:28px 40px;display:flex;align-items:center;gap:14px;">
+      <img src="${APP_URL}/logo.png" alt="AskExpert" width="44" height="44" style="display:block;border-radius:10px;" />
+      <div>
+        <div style="font-size:1.5rem;font-weight:900;color:#fff;letter-spacing:-0.5px;">AskExpert</div>
+        <div style="color:rgba(255,255,255,0.75);font-size:0.85rem;margin-top:2px;">Expert answers, delivered.</div>
+      </div>
     </div>
     <!-- Body -->
     <div style="padding:40px;">
@@ -478,7 +481,7 @@ export async function sendFeedbackEmail({
 
     return await resend.emails.send({
       from: FROM,
-      to: "hi@askexpert.ink",
+      to: "contact@askexpert.ink",
       subject: `[AskExpert] ${type === "bug" ? "🐞 Bug" : "💬 Feedback"} from ${name || "User"}`,
       html: emailWrapper(content),
     });

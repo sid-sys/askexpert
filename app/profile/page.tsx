@@ -131,7 +131,6 @@ function SettingsContent() {
     currency, setCurrency,
     responseTimeHours, setResponseTimeHours,
     subscriberPerks, setSubscriberPerks,
-    pppEnabled, setPppEnabled,
     payoutMethod, setPayoutMethod,
     bankName, setBankName,
     accountHolder, setAccountHolder,
@@ -157,9 +156,13 @@ function SettingsContent() {
   const totalEarnings     = (userProfile as any)?.totalEarnings     ?? 0;
   const pendingBalance    = (userProfile as any)?.pendingPayoutBalance ?? 0;
   const platformPlan      = (userProfile as any)?.platformPlan      ?? "free";
-  const feePercent        = platformPlan === "pro" ? 0 : platformPlan === "creator" ? 5 : 15;
+  const feePercent        = platformPlan === "pro" ? 0 : platformPlan === "creator" ? 10 : 20;
   const creatorKeepsPct   = 100 - feePercent;
-  const payoutUnlocked    = totalEarnings >= 5000;
+  // Admins always have payout unlocked (so the team can validate the flow at
+  // any earnings level). Everyone else needs to cross the $50 cleared-
+  // earnings threshold first.
+  const isAdmin           = !!(userProfile as any)?.isAdmin;
+  const payoutUnlocked    = isAdmin || totalEarnings >= 5000;
   const earningsFormatted = `$${(totalEarnings / 100).toFixed(2)}`;
   const progressPct       = Math.min(100, (totalEarnings / 5000) * 100);
 
@@ -201,8 +204,8 @@ function SettingsContent() {
   // session route now write (incremented at the fee tier active at each
   // payment), and fall back to a current-tier estimate if the creator's
   // user doc predates those fields. This keeps the breakdown correct after
-  // plan upgrades — e.g. $100 earned on free (15% fee) plus $100 earned on
-  // creator (5% fee) renders as $180 net + $20 platform fee.
+  // plan upgrades — e.g. $100 earned on free (20% fee) plus $100 earned on
+  // creator (10% fee) renders as $170 net + $30 platform fee.
   const cachedNet = (userProfile as any)?.totalCreatorNet  as number | undefined;
   const cachedFee = (userProfile as any)?.totalPlatformFee as number | undefined;
   const platformCutCents = typeof cachedFee === "number"
@@ -234,12 +237,12 @@ function SettingsContent() {
         data: {
           displayName, tagline, bio, categories, responseFormats,
           socialLinks, perQuestionPrice: perQ, monthlyPrice: monthly,
-          responseTimeHours, subscriberPerks, currency, pppEnabled,
+          responseTimeHours, subscriberPerks, currency,
         },
       },
       "*"
     );
-  }, [displayName, tagline, bio, categories, responseFormats, socialLinks, perQ, monthly, responseTimeHours, subscriberPerks, pppEnabled]);
+  }, [displayName, tagline, bio, categories, responseFormats, socialLinks, perQ, monthly, responseTimeHours, subscriberPerks]);
 
   useEffect(() => { pushPreview(); }, [pushPreview]);
 
@@ -429,8 +432,8 @@ function SettingsContent() {
                 monthly={monthly} setMonthly={setMonthly}
                 CURRENCY_SYMBOLS={CURRENCY_SYMBOLS}
                 feePercent={feePercent} creatorKeepsPct={creatorKeepsPct}
-                platformPlan={platformPlan} pppEnabled={pppEnabled}
-                setPppEnabled={setPppEnabled} subscriberPerks={subscriberPerks}
+                platformPlan={platformPlan}
+                subscriberPerks={subscriberPerks}
                 setSubscriberPerks={setSubscriberPerks} newPerk={newPerk}
                 setNewPerk={setNewPerk} addPerk={addPerk} removePerk={removePerk}
                 PERK_TEMPLATES={PERK_TEMPLATES} responseTimeHours={responseTimeHours}

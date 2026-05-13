@@ -172,7 +172,7 @@ export default function UpgradePage() {
 
     const target = plan === "pro"
       ? { name: "Pro",     price: "$9.99", fee: "0%" }
-      : { name: "Creator", price: "$4.99", fee: "5%" };
+      : { name: "Creator", price: "$4.99", fee: "10%" };
     const currentLabel = PLAN_LABEL[platformPlan] ?? "your current plan";
     const isUp = (platformPlan === "free")
       || (platformPlan === "creator" && plan === "pro");
@@ -293,7 +293,7 @@ export default function UpgradePage() {
     if (result.isConfirmed) {
       await Swal.fire({
         title: "Request Submitted",
-        html: "Please email <strong>support@askexpert.live</strong> to complete your account deletion. We'll process it within 24 hours.",
+        html: "Please email <strong>contact@askexpert.ink</strong> to complete your account deletion. We'll process it within 24 hours.",
         icon: "info",
         confirmButtonColor: "var(--purple)",
         confirmButtonText: "Got it",
@@ -334,7 +334,7 @@ export default function UpgradePage() {
           {([
             {
               plan: "free" as const, label: "Free", price: "$0", period: "forever",
-              fee: "15%", feeLabel: "per transaction", accent: "var(--text-muted)", accentBg: "#f3f4f6",
+              fee: "20%", feeLabel: "per transaction", accent: "var(--text-muted)", accentBg: "#f3f4f6",
               perks: ["Public creator profile", "Unlimited questions", "Pay-per-question & monthly sub", "Up to $1,000 lifetime earnings"],
             },
             {
@@ -342,7 +342,7 @@ export default function UpgradePage() {
               // violet (the `--purple-light` token was rendering nearly solid
               // and swallowing the purple text on top of it).
               plan: "creator" as const, label: "Creator", price: "$4.99", period: "per month",
-              fee: "5%", feeLabel: "per transaction", accent: "#7c3aed", accentBg: "rgba(124,58,237,0.12)",
+              fee: "10%", feeLabel: "per transaction", accent: "#7c3aed", accentBg: "rgba(124,58,237,0.12)",
               perks: ["Everything in Free", "Custom profile branding", "Priority support", "Up to $10,000 lifetime earnings"],
             },
             {

@@ -36,6 +36,18 @@ export interface FirestoreUser {
   isCreator: boolean;
   isAdmin?: boolean;
 
+  // ── First-touch attribution (captured at signup) ────────────────────────
+  // Populated by lib/attribution.ts. Used by the admin panel to surface
+  // where new users actually came from.
+  attribution?: {
+    referrer:    string;
+    source:      string;
+    medium:      string;
+    campaign:    string;
+    landingPath: string;
+    capturedAt:  string;
+  };
+
   // ── Stripe Connect (auto payout) ────────────────────────────────────────
   stripeAccountId: string | null;
   stripeOnboardingComplete: boolean;
@@ -99,7 +111,6 @@ export interface FirestoreUser {
   allowReviews?: boolean;
   createdAt: Date;
   subscriberPerks?: string[];
-  pppEnabled?: boolean;
 
   // ── Online Status & Vacation ─────────────────────────────────────────────
   isOnline?: boolean;

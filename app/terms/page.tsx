@@ -27,7 +27,7 @@ const sections = [
 • You are responsible for the accuracy and quality of answers you provide.
 • You must answer questions within a reasonable timeframe or issue a refund.
 • You may not impersonate professionals (e.g., claim to be a licensed lawyer or doctor) when you are not.
-• AskExpert takes a platform fee of 15% from each transaction.
+• AskExpert takes a platform fee of up to 20% from each transaction (lower on paid plans — see Pricing).
 • Payouts are processed via Stripe Connect and subject to Stripe's terms.`,
   },
   {
@@ -43,8 +43,8 @@ const sections = [
     title: "5. Payments and Fees",
     content: `All payments are processed by Stripe, Inc. By using payment features, you agree to Stripe's Terms of Service.
 
-• AskExpert charges a **15% platform fee** on all transactions.
-• Experts receive **85%** of the question price, minus Stripe processing fees (~2.9% + 30¢).
+• AskExpert charges a platform fee of **20% on the Free plan**, **10% on Creator**, and **0% on Pro**, applied to both one-time question payments and monthly fan subscriptions.
+• Experts receive the remainder of each payment (e.g. **80%** on Free, **90%** on Creator, **100%** on Pro), minus Stripe processing fees (~2.9% + 30¢).
 • Payouts are transferred to your connected Stripe account.
 • Prices are set in GBP by default but may vary by region.
 • All prices include applicable taxes where required by law.`,
@@ -96,7 +96,7 @@ Violation of this policy may result in immediate account suspension.`,
   },
   {
     title: "13. Contact",
-    content: `For questions about these Terms:\n\n📧 legal@askexpert.ink`,
+    content: `For questions about these Terms:\n\n📧 contact@askexpert.ink`,
   },
 ];
 

@@ -21,6 +21,7 @@ import {
 import { doc, getDoc, setDoc, onSnapshot, collection, query, where, getDocs, serverTimestamp } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
 import { FirestoreUser, COLLECTIONS } from "@/lib/types";
+import { captureAttribution, getAttribution } from "@/lib/attribution";
 
 // ── Username generator ────────────────────────────────────────────────────
 // Produces names like "swift_sage_42" — short, fun, memorable
@@ -105,6 +106,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // profileUnsub holds the active onSnapshot listener for the user profile
   // We keep it in a ref-like pattern using a module-level variable
 
+  // Capture first-touch attribution (referrer + utm_*) once per browser
+  // session so that whenever the visitor eventually signs up — even pages
+  // later — we can stamp the original source onto their user doc.
+  useEffect(() => { captureAttribution(); }, []);
+
   useEffect(() => {
     let profileUnsub: (() => void) | null = null;
 
@@ -151,6 +157,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const snap = await getDoc(ref);
     if (!snap.exists()) {
       const username = await generateUniqueUsername(u.uid);
+      const attribution = getAttribution();
       const profile: FirestoreUser = {
         uid: u.uid,
         email: u.email || "",
@@ -165,7 +172,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         perQuestionPrice: 500,
         monthlyPrice: 1000,
         createdAt: serverTimestamp() as any,
-      };
+        ...(attribution ? { attribution } : {}),
+      } as FirestoreUser;
       await setDoc(ref, profile);
       setUserProfile(profile);
       // Grant Firebase custom claim for admin
@@ -210,6 +218,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await sendEmailVerification(u);
     // Grant admin flag in Firestore if it's the admin email
     const isAdmin = email.toLowerCase() === "sidharthbabu9@gmail.com";
+    const attribution = getAttribution();
     const profile: FirestoreUser = {
       uid: u.uid,
       email: u.email || "",
@@ -224,7 +233,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       perQuestionPrice: 500,
       monthlyPrice: 1000,
       createdAt: serverTimestamp() as any,
-    };
+      ...(attribution ? { attribution } : {}),
+    } as FirestoreUser;
     await setDoc(doc(db, COLLECTIONS.USERS, u.uid), profile);
     setUserProfile(profile);
     // If admin email — set custom claim server-side

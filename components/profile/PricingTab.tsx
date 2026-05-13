@@ -11,8 +11,6 @@ interface PricingTabProps {
   feePercent: number;
   creatorKeepsPct: number;
   platformPlan: string;
-  pppEnabled: boolean;
-  setPppEnabled: (v: boolean) => void;
   subscriberPerks: string[];
   setSubscriberPerks: React.Dispatch<React.SetStateAction<string[]>>;
   newPerk: string;
@@ -54,7 +52,7 @@ function chipStyle(active: boolean, color: "purple" | "orange"): React.CSSProper
 
 export default function PricingTab({
   currency, setCurrency, perQ, setPerQ, monthly, setMonthly, CURRENCY_SYMBOLS,
-  feePercent, creatorKeepsPct, platformPlan, pppEnabled, setPppEnabled,
+  feePercent, creatorKeepsPct, platformPlan,
   subscriberPerks, setSubscriberPerks, newPerk, setNewPerk, addPerk, removePerk,
   PERK_TEMPLATES, responseTimeHours, setResponseTimeHours, RESPONSE_TIME_OPTIONS
 }: PricingTabProps) {
@@ -75,7 +73,7 @@ export default function PricingTab({
               onChange={e => { const v = parseFloat(e.target.value); if (!isNaN(v)) setPerQ(Math.round(v * 100)); }}
             />
             <p style={{ color: "var(--muted)", fontSize: "0.75rem", marginTop: 4 }}>
-              You receive: {CURRENCY_SYMBOLS[currency] || "$"}{((perQ * 0.9) / 100).toFixed(2)}
+              You receive: {CURRENCY_SYMBOLS[currency] || "$"}{((perQ * (1 - feePercent / 100)) / 100).toFixed(2)}
             </p>
           </div>
           <div>
@@ -86,7 +84,7 @@ export default function PricingTab({
               onChange={e => { const v = parseFloat(e.target.value); if (!isNaN(v)) setMonthly(Math.round(v * 100)); }}
             />
             <p style={{ color: "var(--muted)", fontSize: "0.75rem", marginTop: 4 }}>
-              You receive: {CURRENCY_SYMBOLS[currency] || "$"}{((monthly * 0.9) / 100).toFixed(2)}
+              You receive: {CURRENCY_SYMBOLS[currency] || "$"}{((monthly * (1 - feePercent / 100)) / 100).toFixed(2)}
             </p>
           </div>
         </div>
@@ -111,24 +109,6 @@ export default function PricingTab({
           <p style={{ color: "var(--muted)", fontSize: "0.75rem", marginTop: 4 }}>Askers will be charged in this currency.</p>
         </div>
 
-        {/* PPP Toggle */}
-        <div style={{ 
-          marginTop: 24, padding: "16px", background: "rgba(16,185,129,0.06)", 
-          border: "2px dashed var(--green)", borderRadius: 12,
-          display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16
-        }}>
-          <div style={{ flex: 1 }}>
-            <h3 style={{ fontSize: "1rem", color: "var(--green)", fontWeight: 800, margin: "0 0 4px" }}>
-              🌍 Global Fair Pricing (PPP)
-            </h3>
-            <p style={{ color: "var(--muted)", fontSize: "0.82rem", margin: 0 }}>
-              Automatically discount your prices for fans in lower-income countries to make your content accessible globally.
-            </p>
-          </div>
-          <div className="toggle-track" onClick={() => setPppEnabled(!pppEnabled)} role="switch" aria-checked={pppEnabled}>
-            <div className={`toggle-thumb ${pppEnabled ? "active" : ""}`} />
-          </div>
-        </div>
       </div>
 
       {/* SUBSCRIBER PERKS */}

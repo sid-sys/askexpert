@@ -52,22 +52,13 @@ export default function Footer() {
       >
         {/* Brand */}
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <div
-            style={{
-              width: 30,
-              height: 30,
-              borderRadius: 8,
-              background: "linear-gradient(135deg, var(--primary), var(--primary-dark))",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              color: "#fff",
-              fontWeight: 900,
-              fontSize: "0.85rem",
-            }}
-          >
-            A
-          </div>
+          <img
+            src="/logo.png"
+            alt="AskExpert"
+            width={30}
+            height={30}
+            style={{ borderRadius: 8, display: "block", objectFit: "cover" }}
+          />
           <span
             style={{
               fontWeight: 700,

@@ -1,17 +1,31 @@
 import Stripe from "stripe";
 
-export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
+// Lazy singleton so client components can import the pure helpers below
+// (e.g. getPlatformFeePercent) without bundling a Stripe instance — which
+// would throw "Neither apiKey nor config.authenticator provided" in the
+// browser, where STRIPE_SECRET_KEY is intentionally not exposed.
+let _stripe: Stripe | null = null;
+export const stripe: Stripe = new Proxy({} as Stripe, {
+  get(_target, prop, receiver) {
+    if (!_stripe) _stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
+    const value = Reflect.get(_stripe, prop, receiver);
+    return typeof value === "function" ? value.bind(_stripe) : value;
+  },
+});
 
 // ── Platform fee tiers (tied to creator's platform plan) ──────────────────────
-// Free: 15%  |  Creator ($4.99/mo): 5%  |  Pro ($9.99/mo): 0%
+// Free: 20%  |  Creator ($4.99/mo): 10%  |  Pro ($9.99/mo): 0%
+// Applies uniformly to one-time question payments AND monthly fan
+// subscriptions — both routes call computeApplicationFee() / getPlatformFeePercent()
+// against the creator's `platformPlan` at payment time.
 export const PLATFORM_FEE_MAP: Record<string, number> = {
-  free:    15,
-  creator: 5,
+  free:    20,
+  creator: 10,
   pro:     0,
 };
 
 export function getPlatformFeePercent(plan = "free"): number {
-  return PLATFORM_FEE_MAP[plan.toLowerCase()] ?? 15;
+  return PLATFORM_FEE_MAP[plan.toLowerCase()] ?? 20;
 }
 
 /** Returns application fee in cents (whole number) */

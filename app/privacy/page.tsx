@@ -30,12 +30,7 @@ const sections = [
   },
   {
     title: "3. Data Sharing",
-    content: `We do not sell, trade, or rent your personal data to third parties. We share information only in these limited circumstances:
-
-• **Stripe:** Payment processing. Subject to Stripe's privacy policy.
-• **Resend:** Email delivery service for transactional emails.
-• **Firebase (Google):** Authentication and database services.
-• **Legal Requirements:** If required by law or to protect the rights and safety of AskExpert and its users.`,
+    content: `We do not sell, trade, or rent your personal data to third parties.`,
   },
   {
     title: "4. Data Retention",
@@ -55,7 +50,7 @@ const sections = [
 • **Portability:** Receive your data in a portable format.
 • **Objection:** Object to certain types of processing.
 
-To exercise any of these rights, contact us at privacy@askexpert.ink.`,
+To exercise any of these rights, contact us at contact@askexpert.ink.`,
   },
   {
     title: "7. Security",
@@ -71,7 +66,7 @@ To exercise any of these rights, contact us at privacy@askexpert.ink.`,
   },
   {
     title: "10. Contact",
-    content: `For any privacy-related questions or to exercise your rights, contact us at:\n\n📧 privacy@askexpert.ink`,
+    content: `For any privacy-related questions or to exercise your rights, contact us at:\n\n📧 contact@askexpert.ink`,
   },
 ];
 

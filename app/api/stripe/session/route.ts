@@ -61,7 +61,7 @@ export async function GET(req: NextRequest) {
           // accumulated at the fee tier active at payment time.
           const grossCents = parseInt(meta.pricePaid ?? "0");
           if (grossCents > 0) {
-            const subFeePct  = parseFloat(meta.feePercent ?? "15");
+            const subFeePct  = parseFloat(meta.feePercent ?? "20");
             const subFeeCts  = Math.round(grossCents * (subFeePct / 100));
             const subNetCts  = grossCents - subFeeCts;
             await adminDb.collection("users").doc(meta.creatorId).set(
@@ -76,7 +76,7 @@ export async function GET(req: NextRequest) {
             );
             const payoutMethod = (creatorData.payoutMethod ?? "manual_bank") as string;
             if (payoutMethod === "manual_bank") {
-              const feePercent = parseFloat(meta.feePercent ?? "15");
+              const feePercent = parseFloat(meta.feePercent ?? "20");
               const feeCents = Math.round(grossCents * (feePercent / 100));
               const creatorNetCents = grossCents - feeCents;
               await adminDb.collection("pendingPayouts").add({
@@ -168,7 +168,7 @@ export async function GET(req: NextRequest) {
           // totals stay correct across plan upgrades).
           {
             const grossAtPay = parseInt(pricePaid);
-            const feePctAtPay = parseFloat(feePercent ?? "15");
+            const feePctAtPay = parseFloat(feePercent ?? "20");
             const feeAtPay = Math.round(grossAtPay * (feePctAtPay / 100));
             const netAtPay = grossAtPay - feeAtPay;
             await adminDb.collection("users").doc(creatorId).set(
@@ -186,7 +186,7 @@ export async function GET(req: NextRequest) {
           // If manual bank, add to pending payouts
           if (payoutMethod === "manual_bank") {
             const grossCents = parseInt(pricePaid);
-            const feeCents   = Math.round(grossCents * (parseFloat(feePercent ?? "15") / 100));
+            const feeCents   = Math.round(grossCents * (parseFloat(feePercent ?? "20") / 100));
             const creatorNet = grossCents - feeCents;
 
             await adminDb.collection("pendingPayouts").add({
@@ -268,6 +268,18 @@ export async function GET(req: NextRequest) {
       }
     }
 
+    // Resolve response window: prefer the value locked into the session metadata
+    // at checkout (what the asker was actually promised). Fall back to the
+    // creator's current profile value for sessions created before this field
+    // was added to metadata, only finally defaulting to 72h.
+    let responseTimeHours = meta.responseTimeHours ? parseInt(meta.responseTimeHours) : NaN;
+    if (!Number.isFinite(responseTimeHours) && meta.creatorId) {
+      const creatorSnap = await adminDb.collection("users").doc(meta.creatorId).get();
+      const rt = creatorSnap.data()?.responseTimeHours;
+      if (typeof rt === "number" && Number.isFinite(rt)) responseTimeHours = rt;
+    }
+    if (!Number.isFinite(responseTimeHours)) responseTimeHours = 72;
+
     // Only expose fields the asker needs — never expose creator email
     return NextResponse.json({
       creatorName:  meta.creatorName  ?? "Your Expert",
@@ -276,7 +288,7 @@ export async function GET(req: NextRequest) {
       currency:     meta.currency     ?? "usd",
       expiresAt:    meta.expiresAt    ?? null,
       followerEmail: meta.followerEmail ?? "",
-      responseTimeHours: meta.responseTimeHours ? parseInt(meta.responseTimeHours) : 72,
+      responseTimeHours,
     });
   } catch (err: any) {
     console.error("❌ Session retrieval error:", err.message);

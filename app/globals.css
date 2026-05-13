@@ -1629,11 +1629,6 @@ button svg {
     gap: 8px !important;
   }
 
-  /* ── PPP tier legend: wrap ── */
-  .analytics-page > div > div[style*="display: flex"][style*="gap: 14px"] {
-    flex-wrap: wrap !important;
-    gap: 8px !important;
-  }
 }
 
 /* ── Very narrow phones (≤420px): extra tweaks ── */

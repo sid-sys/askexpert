@@ -9,7 +9,6 @@ import { useRouter } from "next/navigation";
 import { FirestoreUser, FirestoreQuestion, SocialLink, COLLECTIONS } from "@/lib/types";
 import PriceToggle from "@/components/PriceToggle";
 import RichComposer, { Attachment } from "@/components/RichComposer";
-import { getPPPFactor } from "@/lib/ppp";
 import Swal from "sweetalert2";
 import { useAuth } from "@/context/AuthContext";
 
@@ -110,7 +109,6 @@ export default function CreatorProfilePage({ params }: { params: Promise<{ usern
   const [previewOverlay, setPreviewOverlay] = useState<PreviewData | null>(null);
   const [notFoundFlag, setNotFoundFlag]   = useState(false);
   const [payMode, setPayMode]             = useState<"one-time" | "monthly">("one-time");
-  const [countryCode, setCountryCode]     = useState<string | null>(null);
   const [isInsidePreviewIframe, setIsInsidePreviewIframe] = useState(false);
 
   useEffect(() => {
@@ -158,22 +156,6 @@ export default function CreatorProfilePage({ params }: { params: Promise<{ usern
     }
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);
-  }, []);
-
-  // Detect country for PPP
-  useEffect(() => {
-    const fetchCountry = async () => {
-      try {
-        const res = await fetch("https://ipapi.co/json/");
-        if (!res.ok) throw new Error("IP lookup failed");
-        const data = await res.json();
-        setCountryCode(data.country_code);
-      } catch (err) {
-        console.warn("PPP country lookup failed, defaulting to 1.0", err);
-        setCountryCode(null);
-      }
-    };
-    fetchCountry();
   }, []);
 
   // ── Check if user is already a subscriber ────────────────────────────────
@@ -382,7 +364,6 @@ export default function CreatorProfilePage({ params }: { params: Promise<{ usern
           mode: "monthly",
           price: display!.monthlyPrice,
           stripeAccountId: (display as any).stripeAccountId ?? null,
-          countryCode,
           attachmentUrls: [],
           followerUid: user.uid,
         }),
@@ -547,7 +528,6 @@ export default function CreatorProfilePage({ params }: { params: Promise<{ usern
           mode:            payMode,
           price,
           stripeAccountId: display.stripeAccountId ?? null,
-          countryCode,
           attachmentUrls,
           followerUid:     user?.uid || null,
         }),
@@ -589,7 +569,6 @@ export default function CreatorProfilePage({ params }: { params: Promise<{ usern
 
   // ── derived values ───────────────────────────────────────────────────────
   const slaLabel  = formatResponseTime(display.responseTimeHours || 72);
-  const pppFactor = (display as any).pppEnabled && countryCode ? getPPPFactor(countryCode) : 1.0;
   const currencySymbol = CURRENCY_SYMBOLS[(display.currency || "usd").toLowerCase()] || "$";
   const socialLinks: SocialLink[] = Array.isArray((display as any).socialLinks)
     ? (display as any).socialLinks
@@ -987,10 +966,10 @@ export default function CreatorProfilePage({ params }: { params: Promise<{ usern
               Single Question
             </p>
             <p style={{ fontSize: "2rem", fontWeight: 900, color: "var(--green)", margin: 0, lineHeight: 1 }}>
-              {currencySymbol}{(((display.perQuestionPrice || 0) * pppFactor) / 100).toFixed(2)}
+              {currencySymbol}{((display.perQuestionPrice || 0) / 100).toFixed(2)}
             </p>
             <p style={{ color: "var(--muted)", fontSize: "0.75rem", margin: "4px 0 0" }}>
-              one-time {pppFactor < 1 && <span style={{ color: "var(--green)", fontWeight: 700 }}>(-{Math.round((1 - pppFactor) * 100)}% PPP)</span>}
+              one-time
             </p>
           </div>
 
@@ -1032,12 +1011,12 @@ export default function CreatorProfilePage({ params }: { params: Promise<{ usern
               Monthly Subscriber
             </p>
             <p style={{ fontSize: "2rem", fontWeight: 900, color: "var(--purple)", margin: 0, lineHeight: 1 }}>
-              {isSubscribed ? "Active" : `${currencySymbol}${(((display.monthlyPrice || 0) * pppFactor) / 100).toFixed(2)}`}
+              {isSubscribed ? "Active" : `${currencySymbol}${((display.monthlyPrice || 0) / 100).toFixed(2)}`}
             </p>
             <p style={{ color: "var(--muted)", fontSize: "0.75rem", margin: "4px 0 0" }}>
               {isSubscribed ? "You are a member!" : (
                 <>
-                  per month {pppFactor < 1 ? `(-${Math.round((1 - pppFactor) * 100)}% PPP)` : ""}
+                  per month
                   {!user && <span style={{ display: "block", color: "var(--purple)", fontWeight: 700, marginTop: 4 }}>• Login required to subscribe</span>}
                 </>
               )}
@@ -1099,7 +1078,7 @@ export default function CreatorProfilePage({ params }: { params: Promise<{ usern
                 ? "Go to Dashboard →"
                 : !user
                 ? "Sign Up & Subscribe →"
-                : `Subscribe ${currencySymbol}${(((display.monthlyPrice || 0) * pppFactor) / 100).toFixed(2)}/mo →`}
+                : `Subscribe ${currencySymbol}${((display.monthlyPrice || 0) / 100).toFixed(2)}/mo →`}
             </button>
           </div>
         )}
@@ -1144,7 +1123,7 @@ export default function CreatorProfilePage({ params }: { params: Promise<{ usern
             >
               {!user
                 ? "Sign Up & Subscribe →"
-                : `Subscribe & Ask ${currencySymbol}${(((display.monthlyPrice || 0) * pppFactor) / 100).toFixed(2)}/mo →`}
+                : `Subscribe & Ask ${currencySymbol}${((display.monthlyPrice || 0) / 100).toFixed(2)}/mo →`}
             </button>
           </div>
         ) : (<>
@@ -1273,9 +1252,9 @@ export default function CreatorProfilePage({ params }: { params: Promise<{ usern
               ) : isSubscribed && payMode === "monthly" ? (
                 "Send Question (Subscriber Perk) 🌟"
               ) : payMode === "one-time" ? (
-                `Pay & Ask 💬 ${currencySymbol}${(((display.perQuestionPrice || 0) * pppFactor) / 100).toFixed(2)}`
+                `Pay & Ask 💬 ${currencySymbol}${((display.perQuestionPrice || 0) / 100).toFixed(2)}`
               ) : (
-                `Subscribe & Ask 🌟 ${currencySymbol}${(((display.monthlyPrice || 0) * pppFactor) / 100).toFixed(2)}/mo`
+                `Subscribe & Ask 🌟 ${currencySymbol}${((display.monthlyPrice || 0) / 100).toFixed(2)}/mo`
               )}
             </button>
 

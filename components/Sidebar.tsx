@@ -86,11 +86,10 @@ export default function Sidebar() {
       justifyContent: isCollapsed ? "center" : "flex-start",
     },
     logoIcon: {
-      background: "linear-gradient(135deg,#a78bfa,#7c3aed)",
       borderRadius: 10, width: 34, height: 34,
-      display: "grid", placeItems: "center",
-      fontFamily: "'Outfit',sans-serif", fontSize: "1rem", fontWeight: 900, color: "#fff",
-      flexShrink: 0, boxShadow: "0 4px 14px rgba(124,58,237,0.4)",
+      display: "block", flexShrink: 0,
+      boxShadow: "0 4px 14px rgba(124,58,237,0.4)",
+      objectFit: "cover" as const,
     },
     logoText: {
       fontFamily: "'Outfit',sans-serif", fontWeight: 800,
@@ -232,7 +231,7 @@ export default function Sidebar() {
         {!isCollapsed ? (
           <>
             <Link href="/" style={css.logoLink}>
-              <div style={css.logoIcon}>A</div>
+              <img src="/logo.png" alt="AskExpert" style={css.logoIcon} />
               <span style={css.logoText}>AskExpert</span>
             </Link>
             <button

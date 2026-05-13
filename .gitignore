@@ -47,3 +47,6 @@ next-env.d.ts
 
 # Local Netlify folder
 .netlify
+
+# Local Claude Code workspace config
+.claude/

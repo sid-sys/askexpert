@@ -54,9 +54,8 @@ function SuccessContent() {
         .success-logo { display:flex; align-items:center; gap:10px; text-decoration:none; }
         .success-logo-icon {
           width:34px; height:34px; border-radius:10px;
-          background:#7c3aed; color:#fff;
-          display:grid; place-items:center;
-          font-size:1rem; font-weight:900; font-family:'Outfit',sans-serif;
+          display:block; object-fit:cover;
+          box-shadow:0 4px 12px rgba(124,58,237,0.3);
         }
         .success-logo-text { font-family:'Outfit',sans-serif; font-size:1.3rem; font-weight:800; color:#7c3aed; }
         .success-badge-label { font-size:0.8rem; color:#9ca3af; font-weight:500; }
@@ -164,7 +163,7 @@ function SuccessContent() {
         {/* ── Header ──────────────────────────────────────────────────────── */}
         <header className="success-header">
           <Link href="/" className="success-logo">
-            <div className="success-logo-icon">A</div>
+            <img src="/logo.png" alt="AskExpert" className="success-logo-icon" />
             <span className="success-logo-text">AskExpert</span>
           </Link>
           <span className="success-badge-label">Payment Confirmation</span>

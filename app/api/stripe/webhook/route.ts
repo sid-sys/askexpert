@@ -122,7 +122,7 @@ export async function POST(req: NextRequest) {
         // so the payout-page breakdown stays accurate even after the
         // creator upgrades to a lower-fee tier later.
         const grossCents = parseInt(pricePaid);
-        const subFeePercent = parseFloat(meta.feePercent ?? "15");
+        const subFeePercent = parseFloat(meta.feePercent ?? "20");
         const subFeeCents = Math.round(grossCents * (subFeePercent / 100));
         const subNetCents = grossCents - subFeeCents;
         await adminDb.collection("users").doc(creatorId).set(
@@ -141,7 +141,7 @@ export async function POST(req: NextRequest) {
         const platformPlan = (creatorData.platformPlan ?? "free") as string;
         const payoutMethod = (creatorData.payoutMethod ?? "manual_bank") as string;
         if (payoutMethod === "manual_bank") {
-          const feePercent = parseFloat(meta.feePercent ?? "15");
+          const feePercent = parseFloat(meta.feePercent ?? "20");
           const feeCents = Math.round(grossCents * (feePercent / 100));
           const creatorNetCents = grossCents - feeCents;
 
@@ -308,7 +308,7 @@ export async function POST(req: NextRequest) {
       console.log(`[Webhook] Step 2: Incrementing creator earnings for ${creatorId}...`);
       {
         const grossCentsAtPay = parseInt(pricePaid);
-        const feePctAtPay     = parseFloat(feePercent ?? "15");
+        const feePctAtPay     = parseFloat(feePercent ?? "20");
         const feeCentsAtPay   = Math.round(grossCentsAtPay * (feePctAtPay / 100));
         const netCentsAtPay   = grossCentsAtPay - feeCentsAtPay;
         await adminDb.collection("users").doc(creatorId).set(
@@ -332,7 +332,7 @@ export async function POST(req: NextRequest) {
         console.log(`[Webhook] Step 3: Creating pendingPayout for ${creatorName}...`);
 
         const grossCents     = parseInt(pricePaid);
-        const feeCents       = Math.round(grossCents * (parseFloat(feePercent ?? "15") / 100));
+        const feeCents       = Math.round(grossCents * (parseFloat(feePercent ?? "20") / 100));
         const creatorNetCents = grossCents - feeCents;
 
         await adminDb.collection("pendingPayouts").add({

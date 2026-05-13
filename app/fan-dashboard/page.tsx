@@ -549,7 +549,7 @@ export default function FanDashboardPage() {
             ) : (
               <>
                 <a href="/" style={{ display: "flex", alignItems: "center", gap: 10, textDecoration: "none" }}>
-                  <div style={{ background: "linear-gradient(135deg,#a78bfa,#7c3aed)", borderRadius: 10, width: 34, height: 34, display: "grid", placeItems: "center", fontFamily: "'Outfit',sans-serif", fontWeight: 900, color: "#fff", fontSize: "1rem", boxShadow: "0 4px 14px rgba(124,58,237,0.4)", flexShrink: 0 }}>A</div>
+                  <img src="/logo.png" alt="AskExpert" width={34} height={34} style={{ borderRadius: 10, display: "block", objectFit: "cover", boxShadow: "0 4px 14px rgba(124,58,237,0.4)", flexShrink: 0 }} />
                   <span style={{ fontFamily: "'Outfit',sans-serif", fontWeight: 800, fontSize: "1.08rem", color: "#fff", letterSpacing: "-0.02em" }}>AskExpert</span>
                 </a>
                 <button
