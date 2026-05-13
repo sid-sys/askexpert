@@ -57,6 +57,18 @@ export default function FanDashboardPage() {
     ? (viewParam as NavId)
     : "home";
   const [creatorUrl, setCreatorUrl] = useState("");
+  // Desktop sidebar collapse — mirrors the creator-side Sidebar.tsx toggle so
+  // the fan layout can hide labels and shrink to icon-only mode. State is
+  // persisted across reloads.
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  useEffect(() => {
+    try {
+      if (localStorage.getItem("fan-sidebar-collapsed") === "true") setSidebarCollapsed(true);
+    } catch { /* SSR / disabled storage */ }
+  }, []);
+  useEffect(() => {
+    try { localStorage.setItem("fan-sidebar-collapsed", sidebarCollapsed ? "true" : "false"); } catch {}
+  }, [sidebarCollapsed]);
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [questions, setQuestions] = useState<Question[]>([]);
   const [loading, setLoading] = useState(true);
@@ -211,21 +223,28 @@ export default function FanDashboardPage() {
   const sidebarNav = (
     <nav style={{ flex: 1, padding: "10px", display: "flex", flexDirection: "column", gap: 2, overflowY: "auto" }}>
       {/* Section label kept identical (color + size) to the creator sidebar
-          for consistent visual weight across both side-nav surfaces. */}
-      <p style={{ fontFamily: "'Outfit',sans-serif", fontSize: "0.58rem", fontWeight: 800, letterSpacing: "0.18em", color: "#f59e0b", textTransform: "uppercase", margin: "14px 0 4px 8px" }}>FAN</p>
+          for consistent visual weight across both side-nav surfaces. Hidden
+          when the sidebar is collapsed to icon-only mode. */}
+      {!sidebarCollapsed && (
+        <p style={{ fontFamily: "'Outfit',sans-serif", fontSize: "0.58rem", fontWeight: 800, letterSpacing: "0.18em", color: "#f59e0b", textTransform: "uppercase", margin: "14px 0 4px 8px" }}>FAN</p>
+      )}
       {NAV.map((item) => {
         const active = activeNav === item.id;
         return (
-          <button key={item.id} onClick={() => go(item.id)} className="fan-sidebar-item" style={{
-            display: "flex", alignItems: "center", gap: 10,
-            borderRadius: 9, border: "none", width: "100%", textAlign: "left",
-            background: active ? "#f59e0b" : "transparent",
-            color: active ? "#fff" : "rgba(161,161,170,0.8)",
-            fontFamily: "'Outfit',sans-serif", fontWeight: active ? 700 : 500,
-            cursor: "pointer", transition: "all 0.18s", marginBottom: 2,
-          }}>
+          <button key={item.id} onClick={() => go(item.id)}
+            className="fan-sidebar-item"
+            title={sidebarCollapsed ? item.label : undefined}
+            style={{
+              display: "flex", alignItems: "center", gap: sidebarCollapsed ? 0 : 10,
+              justifyContent: sidebarCollapsed ? "center" : "flex-start",
+              borderRadius: 9, border: "none", width: "100%", textAlign: "left",
+              background: active ? "#f59e0b" : "transparent",
+              color: active ? "#fff" : "rgba(161,161,170,0.8)",
+              fontFamily: "'Outfit',sans-serif", fontWeight: active ? 700 : 500,
+              cursor: "pointer", transition: "all 0.18s", marginBottom: 2,
+            }}>
             <span style={{ width: 20, height: 20, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{item.icon}</span>
-            {item.label}
+            {!sidebarCollapsed && item.label}
           </button>
         );
       })}
@@ -234,42 +253,65 @@ export default function FanDashboardPage() {
   );
 
   const sidebarFooter = (
-    <div style={{ padding: "12px 10px 20px", borderTop: "1px solid rgba(167,139,250,0.08)", display: "flex", flexDirection: "column", gap: 8 }}>
-      {/* Creator / Fan toggle */}
-      <div style={{ display: "flex", background: "rgba(255,255,255,0.06)", borderRadius: 10, padding: 3, gap: 3 }}>
-        {([{ label: "Creator", href: "/dashboard" }, { label: "Fan", href: "/fan-dashboard" }] as const).map(({ label, href }) => {
-          const active = label === "Fan";
-          return (
-            <button key={label} onClick={() => router.push(href)} style={{
-              flex: 1, padding: "7px 0", borderRadius: 8, border: "none",
-              fontFamily: "'Outfit',sans-serif", fontWeight: 800, fontSize: "0.78rem",
-              cursor: active ? "default" : "pointer",
-              background: active ? "#f59e0b" : "transparent",
-              color: active ? "#1f2937" : "rgba(161,161,170,0.6)",
-              transition: "all 0.18s",
-            }}>
-              {label}
-            </button>
-          );
-        })}
-      </div>
+    <div style={{ padding: sidebarCollapsed ? "12px 0 20px" : "12px 10px 20px", borderTop: "1px solid rgba(167,139,250,0.08)", display: "flex", flexDirection: "column", alignItems: sidebarCollapsed ? "center" : "stretch", gap: 8 }}>
+      {/* Creator / Fan toggle — collapsed sidebar drops to a single
+          "Switch to creator side" icon button to save vertical space. */}
+      {sidebarCollapsed ? (
+        <button
+          onClick={() => router.push("/dashboard")}
+          title="Switch to creator side"
+          aria-label="Switch to creator side"
+          style={{
+            width: 36, height: 36, borderRadius: 10, border: "none",
+            background: "rgba(255,255,255,0.06)", color: "rgba(161,161,170,0.85)",
+            display: "grid", placeItems: "center", cursor: "pointer",
+            transition: "all 0.18s",
+          }}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M3 12h18M14 5l7 7-7 7" />
+          </svg>
+        </button>
+      ) : (
+        <div style={{ display: "flex", background: "rgba(255,255,255,0.06)", borderRadius: 10, padding: 3, gap: 3 }}>
+          {([{ label: "Creator", href: "/dashboard" }, { label: "Fan", href: "/fan-dashboard" }] as const).map(({ label, href }) => {
+            const active = label === "Fan";
+            return (
+              <button key={label} onClick={() => router.push(href)} style={{
+                flex: 1, padding: "7px 0", borderRadius: 8, border: "none",
+                fontFamily: "'Outfit',sans-serif", fontWeight: 800, fontSize: "0.78rem",
+                cursor: active ? "default" : "pointer",
+                background: active ? "#f59e0b" : "transparent",
+                color: active ? "#1f2937" : "rgba(161,161,170,0.6)",
+                transition: "all 0.18s",
+              }}>
+                {label}
+              </button>
+            );
+          })}
+        </div>
+      )}
       <button
         type="button"
         onClick={() => go("settings")}
-        title="Open settings"
+        title={sidebarCollapsed ? `${displayName} — open settings` : "Open settings"}
         style={{
-          display: "flex", alignItems: "center", gap: 10,
-          padding: "8px 10px", borderRadius: 10,
-          background: activeNav === "settings" ? "rgba(167,139,250,0.14)" : "rgba(167,139,250,0.05)",
-          border: "1px solid rgba(167,139,250,0.08)",
+          display: "flex", alignItems: "center",
+          gap: sidebarCollapsed ? 0 : 10,
+          justifyContent: sidebarCollapsed ? "center" : "flex-start",
+          padding: sidebarCollapsed ? "8px 0" : "8px 10px",
+          borderRadius: 10,
+          background: activeNav === "settings" ? "rgba(167,139,250,0.14)" : sidebarCollapsed ? "transparent" : "rgba(167,139,250,0.05)",
+          border: sidebarCollapsed ? "none" : "1px solid rgba(167,139,250,0.08)",
           textAlign: "left", cursor: "pointer", width: "100%",
         }}
         onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = "rgba(167,139,250,0.14)"; }}
-        onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = activeNav === "settings" ? "rgba(167,139,250,0.14)" : "rgba(167,139,250,0.05)"; }}
+        onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = activeNav === "settings" ? "rgba(167,139,250,0.14)" : sidebarCollapsed ? "transparent" : "rgba(167,139,250,0.05)"; }}
       >
         <div style={{ width: 34, height: 34, borderRadius: "50%", background: "linear-gradient(135deg,#f59e0b,#fbbf24)", color: "#fff", display: "grid", placeItems: "center", fontFamily: "'Outfit',sans-serif", fontSize: "0.85rem", fontWeight: 800, flexShrink: 0, boxShadow: "0 2px 8px rgba(245,158,11,0.35)" }}>
           {initial}
         </div>
+        {!sidebarCollapsed && (
         <div style={{ minWidth: 0, flex: 1 }}>
           <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: "0.8rem", fontWeight: 700, color: "#e4e4e7", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 130 }}>{displayName}</div>
           {username && <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: "0.65rem", color: "rgba(167,139,250,0.55)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 130 }}>@{username}</div>}
@@ -283,13 +325,29 @@ export default function FanDashboardPage() {
             background: "rgba(245,158,11,0.18)", color: "#fbbf24", marginTop: 4,
           }}>FAN</span>
         </div>
+        )}
       </button>
-      <button onClick={handleLogout} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", borderRadius: 9, border: "1px solid rgba(255,255,255,0.05)", background: "transparent", color: "rgba(161,161,170,0.55)", fontFamily: "'Outfit',sans-serif", fontSize: "0.82rem", fontWeight: 500, cursor: "pointer", width: "100%", textAlign: "left", transition: "all 0.18s" }}
+      <button
+        onClick={handleLogout}
+        title={sidebarCollapsed ? "Sign out" : undefined}
+        aria-label="Sign out"
+        style={{
+          display: "flex", alignItems: "center",
+          gap: sidebarCollapsed ? 0 : 8,
+          justifyContent: sidebarCollapsed ? "center" : "flex-start",
+          padding: sidebarCollapsed ? "10px 0" : "8px 12px",
+          borderRadius: 9,
+          border: sidebarCollapsed ? "none" : "1px solid rgba(255,255,255,0.05)",
+          background: "transparent",
+          color: "rgba(161,161,170,0.55)",
+          fontFamily: "'Outfit',sans-serif", fontSize: "0.82rem", fontWeight: 500,
+          cursor: "pointer", width: "100%", textAlign: "left", transition: "all 0.18s",
+        }}
         onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = "rgba(239,68,68,0.08)"; (e.currentTarget as HTMLButtonElement).style.color = "#fca5a5"; }}
         onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = "transparent"; (e.currentTarget as HTMLButtonElement).style.color = "rgba(161,161,170,0.55)"; }}
       >
         <svg width="18" height="18" fill="none" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
-        Sign out
+        {!sidebarCollapsed && "Sign out"}
       </button>
     </div>
   );
@@ -354,7 +412,9 @@ export default function FanDashboardPage() {
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&display=swap');
         .fan-root * { box-sizing: border-box; margin: 0; padding: 0; }
-        .fan-sidebar { width: 232px; min-width: 232px; height: 100vh; background: #0a0a0a; border-right: 1px solid rgba(167,139,250,0.10); display: flex; flex-direction: column; position: fixed; top: 0; left: 0; z-index: 200; transition: transform 0.3s cubic-bezier(0.4,0,0.2,1); }
+        .fan-sidebar { width: 232px; min-width: 232px; height: 100vh; background: #0a0a0a; border-right: 1px solid rgba(167,139,250,0.10); display: flex; flex-direction: column; position: fixed; top: 0; left: 0; z-index: 200; transition: transform 0.3s cubic-bezier(0.4,0,0.2,1), width 0.25s ease, min-width 0.25s ease; }
+        /* Collapsed sidebar — same icon-only mode the creator Sidebar uses. */
+        .fan-sidebar.collapsed { width: 72px; min-width: 72px; }
         /* Beat the universal-button rule in globals.css so the fan-side
            sidebar nav items match the creator sidebar (8px 12px padding,
            12px font, normal weight). */
@@ -365,25 +425,36 @@ export default function FanDashboardPage() {
           line-height: 1.1 !important;
           border-radius: 9px !important;
         }
+        .fan-sidebar.collapsed button.fan-sidebar-item {
+          padding: 10px 0 !important;
+        }
         button.fan-sidebar-item.active {
           font-weight: 700 !important;
         }
-        .fan-main { margin-left: 232px; min-height: 100vh; background: #f7f7f8; display: flex; flex-direction: column; }
+        .fan-main { margin-left: 232px; min-height: 100vh; background: #f7f7f8; display: flex; flex-direction: column; transition: margin-left 0.25s ease; }
+        .fan-sidebar.collapsed ~ .fan-main { margin-left: 72px; }
         .fan-topbar { background: #fff; border-bottom: 1px solid #f0f0f0; height: 60px; padding: 0 28px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 100; }
         .fan-content { padding: 40px 24px; }
         .fan-stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; margin-bottom: 28px; }
         .fan-hamburger { display: none; background: none; border: none; cursor: pointer; color: #7c3aed; font-size: 1.3rem; padding: 4px 8px; border-radius: 8px; }
         .fan-overlay { display: none; }
-        @media (max-width: 800px) {
+        /* On tablet (≤900px) the global BottomNav takes over navigation, so
+           the redundant fan-topbar hamburger gets hidden. The sidebar drawer
+           is no longer needed because BottomNav exposes the same items. */
+        @media (max-width: 900px) {
+          .fan-main { margin-left: 0; }
+          .fan-sidebar.collapsed ~ .fan-main { margin-left: 0; }
+          .fan-topbar { padding: 0 18px; }
+          .fan-content { padding: 24px 16px 100px; }
           .fan-sidebar { transform: translateX(-100%); }
           .fan-sidebar.open { transform: translateX(0); box-shadow: 4px 0 32px rgba(0,0,0,0.3); }
-          .fan-main { margin-left: 0; }
-          .fan-topbar { padding: 0 18px; }
-          .fan-hamburger { display: block; }
-          .fan-content { padding: 24px 16px 100px; }
           .fan-overlay { display: block; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 199; }
           .fan-stat-grid { grid-template-columns: repeat(2, 1fr); }
         }
+        /* Hamburger only ever appears in the narrow window where the
+           drawer is needed but BottomNav hasn't activated yet — currently
+           never, since both kick in at the same breakpoint. Left as a
+           safety net for any future viewport tweaks. */
         @media (max-width: 420px) { .fan-stat-grid { grid-template-columns: 1fr; } }
         @media (max-width: 800px) { .fan-chat-grid { grid-template-columns: 1fr !important; } }
         .fan-input { width: 100%; padding: 12px 16px; border: 1.5px solid #e5e7eb; border-radius: 12px; font-size: 0.9rem; font-family: 'Outfit',sans-serif; outline: none; }
@@ -395,12 +466,69 @@ export default function FanDashboardPage() {
         {mobileOpen && <div className="fan-overlay" onClick={() => setMobileOpen(false)} />}
 
         {/* ── Sidebar ── */}
-        <aside className={`fan-sidebar${mobileOpen ? " open" : ""}`}>
-          <div style={{ padding: "20px 16px 16px", borderBottom: "1px solid rgba(167,139,250,0.08)", flexShrink: 0 }}>
-            <a href="/" style={{ display: "flex", alignItems: "center", gap: 10, textDecoration: "none" }}>
-              <div style={{ background: "linear-gradient(135deg,#a78bfa,#7c3aed)", borderRadius: 10, width: 34, height: 34, display: "grid", placeItems: "center", fontFamily: "'Outfit',sans-serif", fontWeight: 900, color: "#fff", fontSize: "1rem", boxShadow: "0 4px 14px rgba(124,58,237,0.4)", flexShrink: 0 }}>A</div>
-              <span style={{ fontFamily: "'Outfit',sans-serif", fontWeight: 800, fontSize: "1.08rem", color: "#fff", letterSpacing: "-0.02em" }}>AskExpert</span>
-            </a>
+        <aside className={`fan-sidebar${mobileOpen ? " open" : ""}${sidebarCollapsed ? " collapsed" : ""}`}>
+          <div style={{
+            padding: sidebarCollapsed ? "20px 8px 16px" : "20px 16px 16px",
+            borderBottom: "1px solid rgba(167,139,250,0.08)",
+            flexShrink: 0,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: sidebarCollapsed ? "center" : "space-between",
+            gap: 8,
+          }}>
+            {sidebarCollapsed ? (
+              // Collapsed: a single hamburger / expand button replaces the
+              // wordmark — taps it to expand the sidebar again.
+              <button
+                type="button"
+                onClick={() => setSidebarCollapsed(false)}
+                aria-label="Expand sidebar"
+                title="Expand sidebar"
+                style={{
+                  background: "transparent", border: "none", cursor: "pointer",
+                  padding: 6, borderRadius: 8,
+                  color: "rgba(255,255,255,0.75)",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  transition: "background 0.15s, color 0.15s",
+                }}
+                onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = "rgba(255,255,255,0.08)"; (e.currentTarget as HTMLButtonElement).style.color = "#fff"; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = "transparent"; (e.currentTarget as HTMLButtonElement).style.color = "rgba(255,255,255,0.75)"; }}
+              >
+                <svg width="22" height="22" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="4" y1="7" x2="20" y2="7" />
+                  <line x1="4" y1="12" x2="20" y2="12" />
+                  <line x1="4" y1="17" x2="20" y2="17" />
+                </svg>
+              </button>
+            ) : (
+              <>
+                <a href="/" style={{ display: "flex", alignItems: "center", gap: 10, textDecoration: "none" }}>
+                  <div style={{ background: "linear-gradient(135deg,#a78bfa,#7c3aed)", borderRadius: 10, width: 34, height: 34, display: "grid", placeItems: "center", fontFamily: "'Outfit',sans-serif", fontWeight: 900, color: "#fff", fontSize: "1rem", boxShadow: "0 4px 14px rgba(124,58,237,0.4)", flexShrink: 0 }}>A</div>
+                  <span style={{ fontFamily: "'Outfit',sans-serif", fontWeight: 800, fontSize: "1.08rem", color: "#fff", letterSpacing: "-0.02em" }}>AskExpert</span>
+                </a>
+                <button
+                  type="button"
+                  onClick={() => setSidebarCollapsed(true)}
+                  aria-label="Collapse sidebar"
+                  title="Collapse sidebar"
+                  style={{
+                    background: "transparent", border: "none", cursor: "pointer",
+                    padding: 6, borderRadius: 8,
+                    color: "rgba(255,255,255,0.6)",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    transition: "background 0.15s, color 0.15s",
+                  }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = "rgba(255,255,255,0.08)"; (e.currentTarget as HTMLButtonElement).style.color = "#fff"; }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = "transparent"; (e.currentTarget as HTMLButtonElement).style.color = "rgba(255,255,255,0.6)"; }}
+                >
+                  <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="4" y1="7" x2="20" y2="7" />
+                    <line x1="4" y1="12" x2="20" y2="12" />
+                    <line x1="4" y1="17" x2="20" y2="17" />
+                  </svg>
+                </button>
+              </>
+            )}
           </div>
 
           {sidebarNav}
@@ -411,10 +539,11 @@ export default function FanDashboardPage() {
         <main className="fan-main">
           <header className="fan-topbar">
             <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-              {/* AskExpert wordmark removed — already rendered in the sidebar
-                  header. The hamburger stays so mobile users can still open
-                  the drawer. */}
-              <button className="fan-hamburger" onClick={() => setMobileOpen(!mobileOpen)} aria-label="Menu">☰</button>
+              {/* AskExpert wordmark + hamburger removed — the sidebar has its
+                  own collapse toggle (desktop) and the global BottomNav owns
+                  navigation at mobile / tablet widths. Empty span keeps the
+                  flex justify-content: space-between layout intact. */}
+              <span />
             </div>
             <div style={{ display: "flex", gap: 10 }}>
               {username && (
