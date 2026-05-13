@@ -35,8 +35,6 @@ const PLAN_PRICES: Record<string, string | undefined> = {
 const PLATFORM_PRICE_IDS = [
   process.env.STRIPE_CREATOR_PRICE_ID,
   process.env.STRIPE_PRO_PRICE_ID,
-  process.env.STRIPE_CREATOR_ANNUAL_PRICE_ID,
-  process.env.STRIPE_PRO_ANNUAL_PRICE_ID,
 ].filter(Boolean) as string[];
 
 function isPlatformSub(s: Stripe.Subscription): boolean {

@@ -64,7 +64,6 @@ export default function LandingPage() {
   const heroRef = useRef<HTMLDivElement>(null);
   const [email, setEmail] = useState("");
   const [submitted, setSubmitted] = useState(false);
-  const [isAnnual, setIsAnnual] = useState(true);
   const expertCountLabel = useCreatorCountLabel();
 
   useEffect(() => {
@@ -460,65 +459,6 @@ export default function LandingPage() {
             Start free. Upgrade when you're ready to scale. No hidden fees.
           </p>
 
-          {/* Toggle */}
-          <div style={{
-            display: "inline-flex",
-            background: "#fff",
-            border: "1px solid #e5e7eb",
-            borderRadius: "999px",
-            padding: "0.35rem",
-            gap: "0.5rem",
-            position: "relative",
-            boxShadow: "0 2px 8px rgba(0,0,0,0.04)"
-          }}>
-            <button
-              suppressHydrationWarning
-              onClick={() => setIsAnnual(false)}
-              style={{
-                fontFamily: "'Inter', sans-serif",
-                fontSize: "0.95rem",
-                fontWeight: 600,
-                padding: "0.6rem 1.25rem",
-                borderRadius: "999px",
-                border: "none",
-                background: !isAnnual ? "#f5f3ff" : "transparent",
-                color: !isAnnual ? "#7c3aed" : "#6b7280",
-                cursor: "pointer",
-                transition: "all 0.2s"
-              }}
-            >
-              Monthly
-            </button>
-            <button
-              suppressHydrationWarning
-              onClick={() => setIsAnnual(true)}
-              style={{
-                fontFamily: "'Inter', sans-serif",
-                fontSize: "0.95rem",
-                fontWeight: 600,
-                padding: "0.6rem 1.25rem",
-                borderRadius: "999px",
-                border: "none",
-                background: isAnnual ? "#f5f3ff" : "transparent",
-                color: isAnnual ? "#7c3aed" : "#6b7280",
-                cursor: "pointer",
-                transition: "all 0.2s",
-                display: "flex",
-                alignItems: "center",
-                gap: "0.4rem"
-              }}
-            >
-              Yearly
-              <span style={{
-                background: "#7c3aed",
-                color: "#fff",
-                fontSize: "0.7rem",
-                padding: "0.1rem 0.4rem",
-                borderRadius: "999px",
-                fontWeight: 800
-              }}>6 MONTHS FREE</span>
-            </button>
-          </div>
         </div>
 
         {/* Pricing cards */}
@@ -554,8 +494,8 @@ export default function LandingPage() {
             },
             {
               tier: "Creator",
-              price: isAnnual ? "$29.94" : "$4.99",
-              period: isAnnual ? "per year" : "per month",
+              price: "$4.99",
+              period: "per month",
               fee: "10%",
               feeLabel: "platform fee per transaction",
               accent: "#7c3aed",
@@ -573,8 +513,8 @@ export default function LandingPage() {
             },
             {
               tier: "Pro",
-              price: isAnnual ? "$59.94" : "$9.99",
-              period: isAnnual ? "per year" : "per month",
+              price: "$9.99",
+              period: "per month",
               fee: "0%",
               feeLabel: "platform fee per transaction",
               accent: "#059669",

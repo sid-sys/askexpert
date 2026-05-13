@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
 
     const results: Record<string, string> = {};
 
-    // ── Creator Plan — $4.99/month + $29.94/year ──────────────────────────
+    // ── Creator Plan — $4.99/month ────────────────────────────────────────
     const creatorProduct = await stripe.products.create({
       name:        "AskExpert Creator Plan",
       description: "10% platform fee on all transactions. Custom branding & analytics.",
@@ -31,18 +31,9 @@ export async function POST(req: NextRequest) {
       metadata:     { plan: "creator", billing: "monthly" },
     });
 
-    const creatorAnnualPrice = await stripe.prices.create({
-      product:      creatorProduct.id,
-      unit_amount:  2994,  // $29.94 ($4.99 × 6)
-      currency:     "usd",
-      recurring:    { interval: "year" },
-      metadata:     { plan: "creator", billing: "annual" },
-    });
+    results["STRIPE_CREATOR_PRICE_ID"] = creatorMonthlyPrice.id;
 
-    results["STRIPE_CREATOR_PRICE_ID"]        = creatorMonthlyPrice.id;
-    results["STRIPE_CREATOR_ANNUAL_PRICE_ID"] = creatorAnnualPrice.id;
-
-    // ── Pro Plan — $9.99/month + $59.94/year ──────────────────────────────
+    // ── Pro Plan — $9.99/month ────────────────────────────────────────────
     const proProduct = await stripe.products.create({
       name:        "AskExpert Pro Plan",
       description: "0% platform fee. Priority support, advanced analytics, custom branding.",
@@ -57,16 +48,7 @@ export async function POST(req: NextRequest) {
       metadata:     { plan: "pro", billing: "monthly" },
     });
 
-    const proAnnualPrice = await stripe.prices.create({
-      product:      proProduct.id,
-      unit_amount:  5994,  // $59.94 ($9.99 × 6)
-      currency:     "usd",
-      recurring:    { interval: "year" },
-      metadata:     { plan: "pro", billing: "annual" },
-    });
-
-    results["STRIPE_PRO_PRICE_ID"]        = proMonthlyPrice.id;
-    results["STRIPE_PRO_ANNUAL_PRICE_ID"] = proAnnualPrice.id;
+    results["STRIPE_PRO_PRICE_ID"] = proMonthlyPrice.id;
 
     // ── Store in Firestore config for reference ────────────────────────────
     await adminDb.collection("config").doc("stripePrices").set({

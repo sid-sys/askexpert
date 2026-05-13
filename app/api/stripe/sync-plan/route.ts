@@ -22,16 +22,14 @@ function resolvePlanFromSub(sub: Stripe.Subscription): "creator" | "pro" | null 
   // Fall back to matching the active price against our env-pinned plan prices.
   const priceId = sub.items.data[0]?.price?.id;
   if (!priceId) return null;
-  if (priceId === process.env.STRIPE_CREATOR_PRICE_ID || priceId === process.env.STRIPE_CREATOR_ANNUAL_PRICE_ID) return "creator";
-  if (priceId === process.env.STRIPE_PRO_PRICE_ID || priceId === process.env.STRIPE_PRO_ANNUAL_PRICE_ID) return "pro";
+  if (priceId === process.env.STRIPE_CREATOR_PRICE_ID) return "creator";
+  if (priceId === process.env.STRIPE_PRO_PRICE_ID)     return "pro";
   return null;
 }
 
 const PLATFORM_PRICE_IDS = [
   process.env.STRIPE_CREATOR_PRICE_ID,
   process.env.STRIPE_PRO_PRICE_ID,
-  process.env.STRIPE_CREATOR_ANNUAL_PRICE_ID,
-  process.env.STRIPE_PRO_ANNUAL_PRICE_ID,
 ].filter(Boolean) as string[];
 
 function isPlatformSub(s: Stripe.Subscription): boolean {
