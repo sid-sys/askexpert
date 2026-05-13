@@ -18,6 +18,10 @@ export default function UpgradePage() {
   const searchParams = useSearchParams();
 
   const [portalLoading, setPortalLoading] = useState(false);
+  // Per-plan loading state so only the clicked card's button shows
+  // "Processing…" — the previous shared boolean was lighting up every
+  // plan card whenever any one was clicked.
+  const [busyPlan, setBusyPlan] = useState<"free" | "creator" | "pro" | null>(null);
   // True while we're hitting /api/stripe/sync-plan after a Checkout redirect so
   // the page can show a "Verifying your plan…" affordance.
   const [verifying, setVerifying] = useState(false);
@@ -114,7 +118,7 @@ export default function UpgradePage() {
   // an existing one — so a free → paid jump must go through Checkout first.
   const handleStartCheckout = async (plan: "creator" | "pro") => {
     if (!user) return;
-    setPortalLoading(true);
+    setBusyPlan(plan);
     try {
       const res = await fetch("/api/stripe/create-subscription-checkout", {
         method: "POST",
@@ -135,8 +139,46 @@ export default function UpgradePage() {
       throw new Error("Checkout session missing URL");
     } catch (err: any) {
       alert(err.message || "Could not start checkout. Try again.");
+      setBusyPlan(null);
+    }
+  };
+
+  // Swap the price on the user's existing subscription instead of creating
+  // a new one. Used when moving creator <-> pro so we don't end up with two
+  // parallel platform subscriptions in Stripe (the bug behind the duplicate
+  // "AskExpert Creator Plan" rows the user saw in the billing portal).
+  const handleChangePlan = async (plan: "creator" | "pro") => {
+    if (!user) return;
+    setBusyPlan(plan);
+    try {
+      const { getIdToken } = await import("firebase/auth");
+      const token = await getIdToken(user as any);
+      const res = await fetch("/api/stripe/change-plan", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ plan }),
+      });
+      const data = await res.json();
+      if (res.status === 404 && data?.error === "NO_EXISTING_SUBSCRIPTION") {
+        // No active sub on file (e.g. local state stale). Fall back to a
+        // fresh Checkout so the user can subscribe cleanly.
+        await handleStartCheckout(plan);
+        return;
+      }
+      if (!res.ok) throw new Error(data.error || "Could not change plan");
+
+      await Swal.fire({
+        icon: "success",
+        title: `You're on ${plan === "pro" ? "Pro" : "Creator"} now! 🎉`,
+        text: "Stripe prorated the difference on your next invoice.",
+        confirmButtonColor: "#7c3aed",
+        timer: 3500,
+        timerProgressBar: true,
+      });
+    } catch (err: any) {
+      alert(err.message || "Could not change plan. Try again.");
     } finally {
-      setPortalLoading(false);
+      setBusyPlan(null);
     }
   };
 
@@ -273,31 +315,42 @@ export default function UpgradePage() {
                       {portalLoading ? "Opening…" : "Manage Billing →"}
                     </button>
                   )
-                ) : (
-                  <button
-                    onClick={() => {
-                      // Free users have no Stripe subscription yet, so the
-                      // billing portal can't act on them — bounce them through
-                      // Checkout instead. Existing paying users can change plan
-                      // or cancel via the portal as before.
-                      if (platformPlan === "free" && (plan === "creator" || plan === "pro")) {
-                        handleStartCheckout(plan);
-                      } else {
-                        handleManagePlan();
-                      }
-                    }}
-                    disabled={portalLoading}
-                    className="btn-brutal"
-                    style={{
-                      width: "100%", padding: "12px 0", fontSize: "0.95rem",
-                      borderColor: isDowngrade ? "#cbd5e1" : accent,
-                      background: isUpgrade ? accent : "transparent",
-                      color: isUpgrade ? "#fff" : isDowngrade ? "var(--text-muted)" : accent,
-                    }}
-                  >
-                    {portalLoading ? "Processing..." : isUpgrade ? `Upgrade to ${label} →` : isDowngrade ? `Downgrade to ${label}` : ""}
-                  </button>
-                )}
+                ) : (() => {
+                  // Routing logic:
+                  //   free  -> paid  : fresh Checkout (no existing sub to swap).
+                  //   paid  -> paid  : swap price on the existing sub via
+                  //                    /api/stripe/change-plan so we don't end
+                  //                    up with parallel subscriptions in Stripe.
+                  //   paid  -> free  : open the Billing Portal to cancel.
+                  const onClick = () => {
+                    if (plan === "free") return handleManagePlan();
+                    if (platformPlan === "free") return handleStartCheckout(plan);
+                    return handleChangePlan(plan);
+                  };
+                  const isBusy = busyPlan === plan;
+                  return (
+                    <button
+                      onClick={onClick}
+                      disabled={isBusy || busyPlan !== null}
+                      className="btn-brutal"
+                      style={{
+                        width: "100%", padding: "12px 0", fontSize: "0.95rem",
+                        borderColor: isDowngrade ? "#cbd5e1" : accent,
+                        background: isUpgrade ? accent : "transparent",
+                        color: isUpgrade ? "#fff" : isDowngrade ? "var(--text-muted)" : accent,
+                        opacity: busyPlan !== null && !isBusy ? 0.55 : 1,
+                      }}
+                    >
+                      {isBusy
+                        ? "Processing…"
+                        : isUpgrade
+                          ? `Upgrade to ${label} →`
+                          : isDowngrade
+                            ? `Downgrade to ${label}`
+                            : ""}
+                    </button>
+                  );
+                })()}
               </div>
             );
           })}
