@@ -35,13 +35,17 @@ export async function POST(req: NextRequest) {
     }
 
     // ── Build Checkout Session ─────────────────────────────────────────────
+    // NEXT_PUBLIC_APP_URL is what .env.local actually exports; the older
+    // NEXT_PUBLIC_BASE_URL was never set, so success_url would resolve to
+    // "undefined/dashboard..." and Stripe would reject the request.
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? process.env.NEXT_PUBLIC_BASE_URL ?? "";
     const session = await stripe.checkout.sessions.create({
       mode: "subscription",
       line_items: [{ price: priceId, quantity: 1 }],
       customer: stripeCustomerId,
       customer_email: stripeCustomerId ? undefined : email,
-      success_url: `${process.env.NEXT_PUBLIC_BASE_URL}/dashboard?plan_activated=${plan}`,
-      cancel_url: `${process.env.NEXT_PUBLIC_BASE_URL}/?plan_cancelled=true`,
+      success_url: `${appUrl}/upgrade?plan_activated=${plan}`,
+      cancel_url: `${appUrl}/upgrade?plan_cancelled=true`,
       metadata: {
         uid,
         plan,

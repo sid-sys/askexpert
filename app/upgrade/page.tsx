@@ -29,6 +29,7 @@ export default function UpgradePage() {
       const res   = await fetch("/api/stripe/billing-portal", {
         method:  "POST",
         headers: { Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ returnUrl: "/upgrade" }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Billing portal failed");
@@ -37,6 +38,37 @@ export default function UpgradePage() {
       }
     } catch (err: any) {
       alert(err.message || "Could not open billing portal. Try again.");
+    } finally {
+      setPortalLoading(false);
+    }
+  };
+
+  // Start a fresh Stripe Checkout session for users moving off the free plan.
+  // The billing portal can't create a brand-new subscription — it only manages
+  // an existing one — so a free → paid jump must go through Checkout first.
+  const handleStartCheckout = async (plan: "creator" | "pro") => {
+    if (!user) return;
+    setPortalLoading(true);
+    try {
+      const res = await fetch("/api/stripe/create-subscription-checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          uid: user.uid,
+          email: user.email ?? "",
+          plan,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Could not start checkout");
+      if (data.url) {
+        // Full-page redirect — Stripe Checkout owns the next screen.
+        window.location.href = data.url;
+        return;
+      }
+      throw new Error("Checkout session missing URL");
+    } catch (err: any) {
+      alert(err.message || "Could not start checkout. Try again.");
     } finally {
       setPortalLoading(false);
     }
@@ -141,7 +173,17 @@ export default function UpgradePage() {
                 </ul>
                 {!isCurrent && (
                   <button
-                    onClick={handleManagePlan}
+                    onClick={() => {
+                      // Free users have no Stripe subscription yet, so the
+                      // billing portal can't act on them — bounce them through
+                      // Checkout instead. Existing paying users can change plan
+                      // or cancel via the portal as before.
+                      if (platformPlan === "free" && (plan === "creator" || plan === "pro")) {
+                        handleStartCheckout(plan);
+                      } else {
+                        handleManagePlan();
+                      }
+                    }}
                     disabled={portalLoading}
                     className="btn-brutal"
                     style={{
