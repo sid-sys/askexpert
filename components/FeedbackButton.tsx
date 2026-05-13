@@ -11,8 +11,9 @@ const isValidEmail = (email: string) => {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 };
 
-// Routes that own their own messaging UI and shouldn't be visually crowded
-// by the floating Feedback button (fans/fan-dashboard chat surfaces).
+// Routes where the floating trigger would visually crowd the page. The panel
+// itself can still be opened from those routes via the `open-feedback` window
+// event (the BottomNav profile sheet dispatches it on mobile).
 const HIDDEN_ON = ["/fans", "/fan-dashboard"];
 
 export default function FeedbackButton() {
@@ -252,7 +253,11 @@ export default function FeedbackButton() {
     } as React.CSSProperties,
   };
 
-  if (hide) return null;
+  // We no longer early-return on `hide`. The component must stay mounted so it
+  // can listen for the `open-feedback` window event (dispatched by the mobile
+  // BottomNav profile sheet on routes like /fan-dashboard). Only the floating
+  // trigger button is suppressed on those routes — the panel itself can still
+  // open programmatically.
 
   return (
     <div className="feedback-button" style={S.wrap}>
@@ -318,7 +323,7 @@ export default function FeedbackButton() {
         </div>
       )}
 
-      {!isMobile && (
+      {!isMobile && !hide && (
         <button
           ref={btnRef}
           onClick={handleToggle}

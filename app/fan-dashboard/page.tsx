@@ -52,7 +52,10 @@ export default function FanDashboardPage() {
   const { user, userProfile, logout } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [activeNav, setActiveNav] = useState<NavId>("home");
+  const viewParam = searchParams?.get("view") as NavId | null;
+  const activeNav: NavId = (["home", "discover", "subscriptions", "questions", "settings"] as const).includes(viewParam as any)
+    ? (viewParam as NavId)
+    : "home";
   const [creatorUrl, setCreatorUrl] = useState("");
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [questions, setQuestions] = useState<Question[]>([]);
@@ -61,8 +64,8 @@ export default function FanDashboardPage() {
   // Two-pane "My Questions" chat tab — which subscription is the active thread?
   const [selectedChatSub, setSelectedChatSub] = useState<string | null>(null);
   // Mobile single-pane switching for the chat tab. Matches the same 800px
-  // breakpoint the rest of the fan-dashboard mobile chrome uses (hamburger,
-  // .fan-bnav), so the chat goes mobile at the same width as everything else.
+  // breakpoint the rest of the fan-dashboard mobile chrome uses (hamburger),
+  // so the chat goes mobile at the same width as everything else.
   const [isChatMobile, setIsChatMobile] = useState(false);
   useEffect(() => {
     const mq = window.matchMedia("(max-width: 800px)");
@@ -132,8 +135,10 @@ export default function FanDashboardPage() {
       confirmButtonText: "Got it",
     });
 
-    // Strip the query params so a refresh doesn't re-fire the toast.
-    router.replace("/fan-dashboard");
+    // Strip the post-subscribe params so a refresh doesn't re-fire the toast,
+    // but preserve any active ?view= nav state.
+    const keep = searchParams?.get("view");
+    router.replace(keep ? `/fan-dashboard?view=${keep}` : "/fan-dashboard");
   }, [searchParams, router]);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [activeQFilter, setActiveQFilter] = useState<"ALL" | "PENDING" | "ANSWERED">("ALL");
@@ -184,7 +189,10 @@ export default function FanDashboardPage() {
     run();
   }, [user]);
 
-  const go = (nav: NavId) => { setActiveNav(nav); setMobileOpen(false); };
+  const go = (nav: NavId) => {
+    setMobileOpen(false);
+    router.replace(`/fan-dashboard?view=${nav}`, { scroll: false });
+  };
   const handleFindCreator = (e: React.FormEvent) => {
     e.preventDefault();
     const raw = creatorUrl.trim(); if (!raw) return;
@@ -342,7 +350,6 @@ export default function FanDashboardPage() {
         .fan-stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; margin-bottom: 28px; }
         .fan-hamburger { display: none; background: none; border: none; cursor: pointer; color: #7c3aed; font-size: 1.3rem; padding: 4px 8px; border-radius: 8px; }
         .fan-overlay { display: none; }
-        .fan-bnav { display: none; }
         @media (max-width: 800px) {
           .fan-sidebar { transform: translateX(-100%); }
           .fan-sidebar.open { transform: translateX(0); box-shadow: 4px 0 32px rgba(0,0,0,0.3); }
@@ -352,10 +359,6 @@ export default function FanDashboardPage() {
           .fan-content { padding: 24px 16px 100px; }
           .fan-overlay { display: block; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 199; }
           .fan-stat-grid { grid-template-columns: repeat(2, 1fr); }
-          .fan-bnav { display: block; position: fixed; bottom: 0; left: 0; right: 0; background: #fff; border-top: 1px solid #f0f0f0; z-index: 300; padding: 8px 0 env(safe-area-inset-bottom,8px); }
-          .fan-bnav-inner { display: flex; justify-content: space-around; }
-          .fan-bnav-btn { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 4px 8px; border: none; background: none; cursor: pointer; color: #9ca3af; font-family: 'Outfit',sans-serif; font-size: 0.62rem; font-weight: 600; min-width: 52px; }
-          .fan-bnav-btn.active { color: #f59e0b; }
         }
         @media (max-width: 420px) { .fan-stat-grid { grid-template-columns: 1fr; } }
         @media (max-width: 800px) { .fan-chat-grid { grid-template-columns: 1fr !important; } }
@@ -678,18 +681,6 @@ export default function FanDashboardPage() {
             </div>{/* /maxWidth wrapper */}
           </div>
         </main>
-
-        {/* ── Bottom Nav (mobile) ── */}
-        <nav className="fan-bnav">
-          <div className="fan-bnav-inner">
-            {NAV.map((item) => (
-              <button key={item.id} className={`fan-bnav-btn${activeNav === item.id ? " active" : ""}`} onClick={() => go(item.id)}>
-                <span style={{ fontSize: "1.2rem", display: "flex" }}>{item.icon}</span>
-                {item.label.split(" ")[0]}
-              </button>
-            ))}
-          </div>
-        </nav>
 
       </div>
     </>
