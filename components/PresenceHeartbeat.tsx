@@ -12,16 +12,26 @@ export default function PresenceHeartbeat() {
   useEffect(() => {
     if (!user) return;
 
-    // 1. Initial online status
+    // 1. Initial online status. We swallow permission-denied silently
+    // because the cleanup write below races with sign-out: by the time we
+    // try to flip isOnline:false, Firebase has already invalidated the
+    // token, so the write 403s. That's expected — the user is leaving
+    // anyway, the heartbeat will time out their presence naturally.
+    let signedOutFlag = false;
     const updatePresence = async (status: boolean) => {
+      if (signedOutFlag) return;
       try {
         const userRef = doc(db, COLLECTIONS.USERS, user.uid);
         await setDoc(userRef, {
           isOnline: status,
           lastSeen: serverTimestamp(),
         }, { merge: true });
-      } catch (err) {
-        console.error("Presence update failed:", err);
+      } catch (err: any) {
+        // permission-denied during sign-out is expected; anything else is
+        // a real issue worth logging.
+        if (err?.code !== "permission-denied") {
+          console.error("Presence update failed:", err);
+        }
       }
     };
 
@@ -46,7 +56,10 @@ export default function PresenceHeartbeat() {
     return () => {
       clearInterval(interval);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
-      updatePresence(false);
+      // Flag is checked inside updatePresence so the cleanup write itself
+      // becomes a no-op. The token's about to be invalidated and the doc
+      // will go stale naturally via the heartbeat timeout.
+      signedOutFlag = true;
     };
   }, [user]);
 
