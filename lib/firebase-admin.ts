@@ -4,47 +4,54 @@ import { getAuth } from "firebase-admin/auth";
 import { getMessaging } from "firebase-admin/messaging";
 import { getStorage } from "firebase-admin/storage";
 
-// Lazy singleton — defer credential parsing until the first real request.
-// Eager init at module-load broke `next build`: Next's page-data analysis
-// imports every route module to introspect it, which fired credential
-// parsing during build with whatever PEM the local env happened to have.
-// On the cloud builder env vars are clean; locally they may be malformed.
-// Lazy init means the build never touches the key and prod request paths
-// still work the moment a route is actually called.
-function getAdminApp(): App {
+// Eager singleton at module-load. The Lambda runtime executed this with
+// proven success for months; we briefly tried a Proxy-based lazy variant
+// (commit 768677a) but the Proxy receiver semantics tripped firebase-
+// admin's internal getters once bundled and every route 502'd.
+//
+// Eager init *does* crash `next build` whenever the local .env.local has
+// a malformed FIREBASE_PRIVATE_KEY — Next's page-data analysis imports
+// every route to introspect it, which fires this init. To keep build
+// usable on a dev machine with a malformed local key, we swallow the
+// init error during build only. Runtime requests on a properly-configured
+// host (Netlify, Vercel) never hit the catch.
+function getAdminApp(): App | null {
   if (getApps().length > 0) return getApps()[0];
 
   const privateKey = process.env.FIREBASE_PRIVATE_KEY
     ?.replace(/\\n/g, "\n")
     ?.replace(/^"|"$/g, "");
 
-  return initializeApp({
-    credential: cert({
-      projectId:   process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-      clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-      privateKey,
-    }),
-    storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
-  });
+  try {
+    return initializeApp({
+      credential: cert({
+        projectId:   process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+        clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+        privateKey,
+      }),
+      storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
+    });
+  } catch (err) {
+    // Re-throw at runtime so a misconfigured production env fails loud
+    // instead of returning null adminDb to every route. Only the build
+    // phase is allowed to skip.
+    if (process.env.NEXT_PHASE !== "phase-production-build") throw err;
+    // eslint-disable-next-line no-console
+    console.warn("[firebase-admin] init skipped during next build:", (err as Error).message);
+    return null;
+  }
 }
 
-// Each export is a Proxy that materialises its concrete admin instance on
-// first property access. Same shape we use in lib/stripe.ts and
-// lib/razorpay.ts — keeps imports cheap at build time.
-function lazy<T extends object>(fn: () => T): T {
-  let cached: T | null = null;
-  return new Proxy({} as T, {
-    get(_t, prop, receiver) {
-      if (!cached) cached = fn();
-      const v = Reflect.get(cached as object, prop, receiver);
-      return typeof v === "function" ? v.bind(cached) : v;
-    },
-  });
-}
+const adminApp = getAdminApp();
 
-export const adminDb        = lazy(() => getFirestore(getAdminApp()));
+// Non-null assertion on `adminApp!` keeps the export types as the proper
+// firebase-admin instances (so callers like runTransaction infer their
+// callback args correctly). The only path that produces a null adminApp
+// is build-phase env failure — and at build time these exports are never
+// dereferenced, only imported for type analysis.
+export const adminDb        = getFirestore(adminApp!);
 export const db             = adminDb; // Alias for compatibility
-export const adminAuth      = lazy(() => getAuth(getAdminApp()));
-export const adminMessaging = lazy(() => getMessaging(getAdminApp()));
-export const adminStorage   = lazy(() => getStorage(getAdminApp()));
+export const adminAuth      = getAuth(adminApp!);
+export const adminMessaging = getMessaging(adminApp!);
+export const adminStorage   = getStorage(adminApp!);
 export { FieldValue };

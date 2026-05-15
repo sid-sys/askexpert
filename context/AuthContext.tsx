@@ -148,6 +148,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  // Resolve the new user's billing currency from their geo. Indian creators
+  // settle through Razorpay in INR; everyone else uses Stripe in USD. We do
+  // this once at signup and don't expose a UI selector — the dropdown was
+  // confusing and led to creators locking themselves into a currency their
+  // bank account can't actually receive.
+  const detectCurrencyByCountry = async (): Promise<"inr" | "usd"> => {
+    try {
+      const r = await fetch("/api/geo");
+      if (r.ok) {
+        const d = await r.json();
+        if (d?.country === "IN") return "inr";
+      }
+    } catch { /* dev / offline → fall through to USD */ }
+    return "usd";
+  };
+
   const signInWithGoogle = async () => {
     const provider = new GoogleAuthProvider();
     const result = await signInWithPopup(auth, provider);
@@ -158,6 +174,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!snap.exists()) {
       const username = await generateUniqueUsername(u.uid);
       const attribution = getAttribution();
+      const currency = await detectCurrencyByCountry();
       const profile: FirestoreUser = {
         uid: u.uid,
         email: u.email || "",
@@ -171,6 +188,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         stripeOnboardingComplete: false,
         perQuestionPrice: 500,
         monthlyPrice: 1000,
+        currency,
         createdAt: serverTimestamp() as any,
         ...(attribution ? { attribution } : {}),
       } as FirestoreUser;
@@ -219,6 +237,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Grant admin flag in Firestore if it's the admin email
     const isAdmin = email.toLowerCase() === "sidharthbabu9@gmail.com";
     const attribution = getAttribution();
+    const currency = await detectCurrencyByCountry();
     const profile: FirestoreUser = {
       uid: u.uid,
       email: u.email || "",
@@ -232,6 +251,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       stripeOnboardingComplete: false,
       perQuestionPrice: 500,
       monthlyPrice: 1000,
+      currency,
       createdAt: serverTimestamp() as any,
       ...(attribution ? { attribution } : {}),
     } as FirestoreUser;

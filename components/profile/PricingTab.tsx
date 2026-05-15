@@ -93,20 +93,27 @@ export default function PricingTab({
           {feePercent > 0 && <> Upgrade your plan below to reduce fees.</>}
         </p>
 
-        {/* Currency selector */}
+        {/* Read-only currency display. The picker was removed — billing
+            currency is now locked to the creator's country (India → INR
+            via Razorpay, everyone else → USD via Stripe). Letting creators
+            mix and match led to mismatches between their bank country and
+            the gateway used to settle. */}
         <div style={{ marginTop: 16 }}>
           <label style={labelStyle}>Billing Currency</label>
-          <select
-            value={currency}
-            onChange={e => setCurrency(e.target.value)}
-            className="input-brutal"
-            style={{ maxWidth: 200 }}
-          >
-            {["usd","gbp","eur","inr","cad","aud","sgd"].map(c => (
-              <option key={c} value={c}>{c.toUpperCase()}</option>
-            ))}
-          </select>
-          <p style={{ color: "var(--muted)", fontSize: "0.75rem", marginTop: 4 }}>Askers will be charged in this currency.</p>
+          <div style={{
+            display: "inline-flex", alignItems: "center", gap: 8,
+            padding: "10px 16px", borderRadius: 10,
+            background: "rgba(0,0,0,0.04)", color: "var(--text)",
+            fontWeight: 700, fontSize: "0.95rem", border: "1px solid rgba(0,0,0,0.08)",
+          }}>
+            <span>{currency.toUpperCase()}</span>
+            <span style={{ color: "var(--muted)", fontSize: "0.78rem", fontWeight: 500 }}>
+              · auto-set from your country
+            </span>
+          </div>
+          <p style={{ color: "var(--muted)", fontSize: "0.75rem", marginTop: 6 }}>
+            Askers are charged in this currency. Contact support if you need it changed.
+          </p>
         </div>
 
       </div>

@@ -33,29 +33,82 @@ const HOW_IT_WORKS = [
 ];
 
 const STATS = [
-  { value: "10,000+", label: "Questions Answered" },
-  { value: "$250K+", label: "Paid to Creators" },
+  { value: "1,000+", label: "Questions Answered" },
+  { value: "$10K+", label: "Paid to Creators" },
   { value: "4.9★", label: "Average Rating" },
   { value: "3 min", label: "Setup Time" },
+];
+
+// What this site solves — kept to a single tight sentence per audience.
+// Surfaces below the hero so a first-time visitor knows whether to keep
+// reading or bounce.
+const WHO_ITS_FOR = [
+  {
+    icon: "🎙️",
+    audience: "Creators",
+    pitch: "Turn your DMs into income. Set a price per question or a monthly subscription — get paid for the advice you'd otherwise give for free.",
+    bullets: [
+      "Stop answering the same question for free in DMs",
+      "Filter out tire-kickers — paid questions only",
+      "Subscribers chat with you directly, no extra work",
+    ],
+  },
+  {
+    icon: "🙋",
+    audience: "Fans",
+    pitch: "Skip the noise and get a real answer from the person you actually trust. Pay once, or subscribe for unlimited chat.",
+    bullets: [
+      "Personalised reply from the expert themselves",
+      "Auto-refund if they don't answer in time",
+      "Cheaper than a 1:1 call, faster than a course",
+    ],
+  },
+];
+
+const FAQS = [
+  {
+    q: "How much does it cost?",
+    a: "Free to sign up. We take a 20% platform fee on Free plan, 10% on Creator (₹399/mo or $4.99/mo), and 0% on Pro (₹799/mo or $9.99/mo). No charges to fans.",
+  },
+  {
+    q: "When do creators get paid?",
+    a: "Earnings accrue in your account the moment a fan pays. Withdraw any time after crossing the payout threshold ($50 / ₹1,000) via your bank, PayPal, Wise, or Stripe Connect.",
+  },
+  {
+    q: "What if the expert doesn't answer?",
+    a: "Every question has an SLA you set (3–168 hours). If the expert doesn't answer in time, the fan is automatically refunded — no questions asked.",
+  },
+  {
+    q: "Can I cancel my subscription?",
+    a: "Anytime. Cancel at cycle end to keep access until your next billing date, or cancel immediately. Refunds for unused days aren't issued, but you keep the conversation history.",
+  },
+  {
+    q: "Does this work in India?",
+    a: "Yes. Indian creators charge in ₹ via Razorpay (UPI, cards, netbanking). International creators charge in $/€/£ via Stripe. The right gateway shows up based on the creator's currency.",
+  },
+  {
+    q: "Is my payment information safe?",
+    a: "We never see or store your card. All payments go through Stripe and Razorpay — both PCI-DSS Level 1 certified.",
+  },
 ];
 
 const TESTIMONIALS = [
   {
     avatar: "https://i.pravatar.cc/80?img=1",
-    name: "Sarah Chen",
-    role: "Fitness Coach",
+    name: "Jessica Carter",
+    role: "Fitness Coach · New York, US",
     text: "I made $1,200 in my first week. My followers already wanted my advice — AskExpert just made it easy to get paid for it.",
   },
   {
     avatar: "https://i.pravatar.cc/80?img=2",
-    name: "Marcus Reid",
-    role: "Financial Advisor",
+    name: "James Whitfield",
+    role: "Financial Advisor · London, UK",
     text: "The setup was shockingly simple. I had my link live before my morning coffee was done.",
   },
   {
     avatar: "https://i.pravatar.cc/80?img=3",
-    name: "Priya Sharma",
-    role: "UX Designer",
+    name: "Wei Zhang",
+    role: "UX Designer · Shanghai, China",
     text: "Finally a platform that respects my time. I answer when I want, charge what I want, done.",
   },
 ];
@@ -65,6 +118,25 @@ export default function LandingPage() {
   const [email, setEmail] = useState("");
   const [submitted, setSubmitted] = useState(false);
   const expertCountLabel = useCreatorCountLabel();
+
+  // Visitor country — used to localise the platform-plan pricing card so an
+  // Indian visitor sees ₹0/₹399/₹799 and lifetime caps in ₹, while everyone
+  // else sees $0/$4.99/$9.99 in USD. Falls back to USD until /api/geo
+  // resolves (a flash of USD on slow networks is acceptable).
+  const [visitorCountry, setVisitorCountry] = useState<string | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    const forced = typeof window !== "undefined"
+      ? new URLSearchParams(window.location.search).get("country")
+      : null;
+    const url = forced ? `/api/geo?force=${encodeURIComponent(forced)}` : "/api/geo";
+    fetch(url)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (!cancelled && d?.country) setVisitorCountry(d.country); })
+      .catch(() => { /* silent — banner just defaults to USD */ });
+    return () => { cancelled = true; };
+  }, []);
+  const isIndia = visitorCountry === "IN";
 
   useEffect(() => {
     if (!heroRef.current) return;
@@ -300,6 +372,49 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* ─── WHO IT'S FOR (Creators / Fans) ───
+          Two-column value prop so a first-time visitor can self-identify
+          and see in one sentence what they get. Sits above testimonials
+          so the "why bother" question is answered before the social proof. */}
+      <section style={{ background: "#fafafa", padding: "6rem 5%", borderTop: "1px solid #e5e7eb" }}>
+        <div style={{ maxWidth: 1100, margin: "0 auto" }}>
+          <div style={{ textAlign: "center", marginBottom: "3rem" }}>
+            <h2 style={{ fontFamily: "'Outfit', sans-serif", fontSize: "clamp(1.8rem, 3vw, 2.8rem)", fontWeight: 800, color: "#1f2937" }}>
+              Who it&apos;s for
+            </h2>
+            <p style={{ fontFamily: "'Inter', sans-serif", fontSize: "1rem", color: "#6b7280", marginTop: "0.5rem" }}>
+              One platform, two reasons to be here.
+            </p>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: "1.5rem" }}>
+            {WHO_ITS_FOR.map((row) => (
+              <div key={row.audience} style={{
+                background: "#fff",
+                border: "1px solid #e5e7eb",
+                borderRadius: "28px",
+                padding: "2rem",
+                boxShadow: "0 4px 16px rgba(0,0,0,0.05)",
+              }}>
+                <div style={{ fontSize: "2.4rem", marginBottom: "0.8rem" }}>{row.icon}</div>
+                <h3 style={{ fontFamily: "'Outfit', sans-serif", fontSize: "1.4rem", fontWeight: 800, color: "#1f2937", marginBottom: "0.6rem" }}>
+                  For {row.audience}
+                </h3>
+                <p style={{ fontFamily: "'Inter', sans-serif", fontSize: "0.98rem", color: "#374151", lineHeight: 1.65, marginBottom: "1.2rem" }}>
+                  {row.pitch}
+                </p>
+                <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: 8 }}>
+                  {row.bullets.map((b) => (
+                    <li key={b} style={{ display: "flex", gap: 10, fontSize: "0.9rem", color: "#4b5563", alignItems: "flex-start", fontFamily: "'Inter', sans-serif" }}>
+                      <span style={{ color: "#7c3aed", flexShrink: 0, fontWeight: 800 }}>✓</span>{b}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
       {/* ─── TESTIMONIALS ─── */}
       <section style={{ background: "#fff", padding: "6rem 5%", borderTop: "1px solid #e5e7eb" }}>
         <div style={{ maxWidth: 1100, margin: "0 auto" }}>
@@ -335,6 +450,60 @@ export default function LandingPage() {
                   </div>
                 </div>
               </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ─── FAQ ───
+          Native <details> elements so it works without any JS state —
+          one open at a time isn't strictly enforced but the default
+          accordion behaviour is fine. */}
+      <section style={{ background: "#fafafa", padding: "6rem 5%", borderTop: "1px solid #e5e7eb" }}>
+        <div style={{ maxWidth: 760, margin: "0 auto" }}>
+          <div style={{ textAlign: "center", marginBottom: "3rem" }}>
+            <h2 style={{ fontFamily: "'Outfit', sans-serif", fontSize: "clamp(1.8rem, 3vw, 2.8rem)", fontWeight: 800, color: "#1f2937" }}>
+              Frequently asked
+            </h2>
+            <p style={{ fontFamily: "'Inter', sans-serif", fontSize: "1rem", color: "#6b7280", marginTop: "0.5rem" }}>
+              Still curious? Drop a question to <a href="mailto:hi@askexpert.ink" style={{ color: "#7c3aed", fontWeight: 700 }}>hi@askexpert.ink</a>.
+            </p>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            {FAQS.map((f) => (
+              <details key={f.q} style={{
+                background: "#fff",
+                border: "1px solid #e5e7eb",
+                borderRadius: 16,
+                padding: "1rem 1.4rem",
+                boxShadow: "0 1px 4px rgba(0,0,0,0.03)",
+              }}>
+                <summary style={{
+                  fontFamily: "'Outfit', sans-serif",
+                  fontWeight: 700,
+                  fontSize: "1rem",
+                  color: "#1f2937",
+                  cursor: "pointer",
+                  listStyle: "none",
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  gap: 12,
+                }}>
+                  {f.q}
+                  <span style={{ color: "#7c3aed", fontSize: "1.4rem", fontWeight: 400, flexShrink: 0 }}>＋</span>
+                </summary>
+                <p style={{
+                  fontFamily: "'Inter', sans-serif",
+                  fontSize: "0.95rem",
+                  color: "#4b5563",
+                  lineHeight: 1.65,
+                  marginTop: "0.9rem",
+                  marginBottom: 0,
+                }}>
+                  {f.a}
+                </p>
+              </details>
             ))}
           </div>
         </div>
@@ -475,7 +644,7 @@ export default function LandingPage() {
           {[
             {
               tier: "Free",
-              price: "$0",
+              price: isIndia ? "₹0" : "$0",
               period: "forever",
               fee: "20%",
               feeLabel: "platform fee per transaction",
@@ -487,14 +656,14 @@ export default function LandingPage() {
                 "Public creator profile",
                 "Unlimited questions",
                 "Pay-per-question & monthly pricing",
-                "Up to $1000 in monthly earnings"
+                isIndia ? "Up to ₹10K in lifetime earnings" : "Up to $1,000 in lifetime earnings",
               ],
               cta: "Get started free",
               ctaHref: "/signup",
             },
             {
               tier: "Creator",
-              price: "$4.99",
+              price: isIndia ? "₹399" : "$4.99",
               period: "per month",
               fee: "10%",
               feeLabel: "platform fee per transaction",
@@ -506,14 +675,14 @@ export default function LandingPage() {
                 "Everything in Free",
                 "Custom profile branding & colors",
                 "Priority email support",
-                "Up to $10,000 in monthly earnings"
+                isIndia ? "Up to ₹50K in lifetime earnings" : "Up to $10,000 in lifetime earnings",
               ],
               cta: "Get started",
               ctaHref: "/signup?plan=creator",
             },
             {
               tier: "Pro",
-              price: "$9.99",
+              price: isIndia ? "₹799" : "$9.99",
               period: "per month",
               fee: "0%",
               feeLabel: "platform fee per transaction",

@@ -601,6 +601,64 @@ export async function sendPayoutCancelledEmail({
   }
 }
 
+// ── 7a. Vacation NOTIFY-ME confirmation → fan just signed up to be alerted ──
+// Sent immediately when a fan submits the "Notify Me" form on a vacation-mode
+// creator profile. Confirms they're on the list and sets expectations so they
+// don't think the form silently dropped their email.
+export async function sendVacationConfirmationEmail({
+  to,
+  creatorName,
+  creatorUsername,
+  expectedReturn,
+}: {
+  to: string;
+  creatorName: string;
+  creatorUsername: string;
+  expectedReturn: Date | null;
+}) {
+  try {
+    const profileUrl = `${APP_URL}/${creatorUsername}`;
+    const returnLabel = expectedReturn
+      ? expectedReturn.toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" })
+      : null;
+    const content = `
+      <h2 style="font-size:1.4rem;font-weight:800;color:#1f2937;margin:0 0 8px;">You're on the list 🎉</h2>
+      <p style="color:#6b7280;font-size:0.92rem;margin:0 0 24px;">
+        We'll email you the moment <strong>${creatorName}</strong> is back and accepting questions again.
+      </p>
+
+      <div style="background:#fef3c7;border-radius:16px;padding:20px;text-align:center;margin-bottom:24px;border:1px solid #fbbf24;">
+        <div style="font-size:2rem;margin-bottom:8px;">🏖️</div>
+        <p style="font-size:0.95rem;color:#92400e;font-weight:700;margin:0 0 6px;">${creatorName} is currently on vacation</p>
+        ${returnLabel ? `<p style="font-size:0.85rem;color:#78350f;margin:0;">Expected back: <strong>${returnLabel}</strong></p>` : ""}
+      </div>
+
+      <a href="${profileUrl}"
+        style="display:block;background:#7c3aed;color:#fff;text-align:center;padding:14px 24px;border-radius:99px;font-weight:700;font-size:0.95rem;text-decoration:none;">
+        View ${creatorName}'s profile →
+      </a>
+
+      <p style="text-align:center;color:#9ca3af;font-size:0.78rem;margin-top:20px;">
+        You'll only hear from us once — when ${creatorName} returns. No spam, ever.
+      </p>
+    `;
+    const res = await resend.emails.send({
+      from: FROM,
+      to,
+      subject: `You're on the list for ${creatorName} 🏖️`,
+      html: emailWrapper(content),
+    });
+    if (res.error) {
+      console.error("[sendVacationConfirmationEmail] resend error:", res.error);
+      throw new Error(`Resend error: ${res.error.message}`);
+    }
+    return res;
+  } catch (err) {
+    console.error("[sendVacationConfirmationEmail] failed:", err);
+    throw err;
+  }
+}
+
 // ── 7. Vacation return → notify subscribers ────────────────────────────────
 export async function sendVacationReturnEmail({
   to,

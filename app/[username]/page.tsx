@@ -374,6 +374,19 @@ export default function CreatorProfilePage({ params }: { params: Promise<{ usern
       });
       return;
     }
+    // Block NEW subscriptions while the creator is on vacation. Existing
+    // subscribers keep their recurring billing untouched — Stripe/Razorpay
+    // continue auto-renewing on their normal schedule. Only the signup
+    // path is gated here.
+    if (display?.vacationMode) {
+      Swal.fire({
+        icon: "info",
+        title: "Creator is on vacation",
+        text: "New subscriptions are paused while they're away. Tap the 'Notify Me' button on their profile and we'll email you the moment they're back.",
+        confirmButtonColor: "var(--purple)",
+      });
+      return;
+    }
     if (!user) {
       router.push(`/auth?mode=signup&redirect=${encodeURIComponent("/" + username)}`);
       return;
@@ -1235,6 +1248,8 @@ export default function CreatorProfilePage({ params }: { params: Promise<{ usern
                 ? "Your creator page"
                 : isSubscribed
                 ? "Go to Dashboard →"
+                : display.vacationMode
+                ? "🏖️ On vacation — subscriptions paused"
                 : !user
                 ? "Sign Up & Subscribe →"
                 : `Subscribe ${currencySymbol}${((display.monthlyPrice || 0) / 100).toFixed(2)}/mo →`}
