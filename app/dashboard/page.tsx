@@ -9,6 +9,7 @@ import { db } from "@/lib/firebase";
 import {
   FirestoreQuestion, COLLECTIONS,
 } from "@/lib/types";
+import { formatMoney } from "@/lib/money";
 import Swal from "sweetalert2";
 import { requestNotificationPermission } from "@/lib/fcm";
 import { doc, setDoc, arrayUnion } from "firebase/firestore";
@@ -367,8 +368,8 @@ export default function DashboardPage() {
           // monthly subscriptions. Both numbers are the creator's NET (after
           // platform fee), pulled from the cached buckets the webhook writes
           // per payment type.
-          { label: "From Questions", value: `$${(stats.oneTimeNetCents/100).toFixed(2)}`, color: "#7c3aed", icon: "💰", bg: "#f5f3ff" },
-          { label: "From Subscriptions", value: `$${(stats.subsNetCents/100).toFixed(2)}`, color: "#0ea5e9", icon: "🔁", bg: "#e0f2fe" },
+          { label: "From Questions", value: formatMoney(stats.oneTimeNetCents, (userProfile as any)?.currency), color: "#7c3aed", icon: "💰", bg: "#f5f3ff" },
+          { label: "From Subscriptions", value: formatMoney(stats.subsNetCents, (userProfile as any)?.currency), color: "#0ea5e9", icon: "🔁", bg: "#e0f2fe" },
           { label: "Vacation ROI", value: `${stats.vacationConversions}/${stats.vacationLeadsCount}`, color: "#d97706", icon: "🏖️", bg: "#fffbeb" },
         ].map((s) => (
           <div key={s.label} style={S.statCard}

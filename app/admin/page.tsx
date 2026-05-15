@@ -5,6 +5,7 @@ import { collection, getDocs, query, where, orderBy, limit } from "firebase/fire
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/context/AuthContext";
 import { COLLECTIONS, FirestoreUser } from "@/lib/types";
+import Swal from "sweetalert2";
 
 // ── Tiny formatting helpers (kept local — the admin page is the only consumer) ──
 const fmt$ = (cents: number) =>
@@ -32,10 +33,16 @@ interface CreatorSummary {
   fans: number;             // active subscribers
   totalEarnings: number;    // cents, gross
   creatorNet: number;       // cents, what they actually receive
+  // Used by the admin "Cancel Subscription" action so we can show the
+  // button only for creators on a paid plan AND know which gateway to hit.
+  // The API auto-detects too, but the UI hides the button if both are null.
+  stripeSubId?:    string | null;
+  razorpaySubId?:  string | null;
 }
 
 interface BugReport {
   id: string;
+  type:            string;   // "bug" | "feedback" — drives the row badge below
   message:         string;   // user's free-text note
   email:           string;
   name:            string;
@@ -80,9 +87,13 @@ export default function AdminPage() {
         // Bug reports query is wrapped separately because it may fail with
         // a permission error if the firestore.rules update hasn't been
         // deployed yet — we don't want that to break the whole admin page.
+        // Include both "bug" and "feedback" types — earlier this filtered
+        // to bugs only, which silently hid all 💡 Feedback submissions
+        // from the admin panel. Dropping the type filter keeps the same
+        // single-field index (createdAt DESC) and shows everything; the
+        // row renderer below already handles missing error fields.
         const bugQuery = query(
           collection(db, "feedback"),
-          where("type", "==", "bug"),
           orderBy("createdAt", "desc"),
           limit(50),
         );
@@ -102,6 +113,7 @@ export default function AdminPage() {
             const x = d.data();
             return {
               id: d.id,
+              type:            x.type            || "bug",
               message:         x.message         || "",
               email:           x.email           || "",
               name:            x.name            || "",
@@ -141,6 +153,77 @@ export default function AdminPage() {
     return m;
   }, [subs]);
 
+  // Admin "Cancel Subscription" — works for both Stripe and Razorpay subs;
+  // the API auto-detects which gateway holds the active sub. We pass the
+  // entire creator row in so we can show their name / current plan in the
+  // confirm dialog and reload the list optimistically on success.
+  const [cancellingUid, setCancellingUid] = useState<string | null>(null);
+  const handleCancelUserSub = async (c: CreatorSummary) => {
+    if (!user) return;
+    const choice = await Swal.fire({
+      icon: "warning",
+      title: `Cancel ${c.displayName}'s plan?`,
+      html: `
+        <div style="text-align:left; font-size:0.92rem; line-height:1.55;">
+          They're currently on <strong>${planLabel(c.plan)}</strong>.<br/><br/>
+          <strong>Cancel at cycle end</strong> — keep features until their current period ends.<br/>
+          <strong>Cancel now</strong> — immediate downgrade to Free, no refund handled here.
+        </div>
+      `,
+      showDenyButton: true,
+      showCancelButton: true,
+      confirmButtonText: "Cancel at cycle end",
+      denyButtonText:    "Cancel now",
+      cancelButtonText:  "Keep their plan",
+      confirmButtonColor: "#7c3aed",
+      denyButtonColor:    "#ef4444",
+      cancelButtonColor:  "#6b7280",
+      reverseButtons: true,
+    });
+    if (choice.isDismissed) return;
+    const cancelAtCycleEnd = !choice.isDenied;
+
+    setCancellingUid(c.uid);
+    try {
+      const { getIdToken } = await import("firebase/auth");
+      const token = await getIdToken(user as any);
+      const res = await fetch("/api/admin/cancel-user-subscription", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ uid: c.uid, cancelAtCycleEnd }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Cancel failed");
+
+      await Swal.fire({
+        icon: "success",
+        title: cancelAtCycleEnd ? "Cancellation scheduled" : "Subscription cancelled",
+        text:  cancelAtCycleEnd
+          ? `${c.displayName}'s plan will end at the cycle close. Their access stays active until then.`
+          : `${c.displayName} has been moved to Free. Cancel was processed via ${data.gateway}.`,
+        confirmButtonColor: "#7c3aed",
+      });
+      // Optimistic: drop the user's subId locally so the button hides
+      // immediately. The next data fetch will reconcile if anything drifts.
+      setUsers(prev => prev.map(u => u.uid === c.uid ? ({
+        ...u,
+        platformPlan: cancelAtCycleEnd ? u.platformPlan : "free",
+        platformPlanCancelAtPeriodEnd: cancelAtCycleEnd ? true : undefined,
+        platformPlanStripeSubId:   cancelAtCycleEnd ? (u as any).platformPlanStripeSubId   : null,
+        platformPlanRazorpaySubId: cancelAtCycleEnd ? (u as any).platformPlanRazorpaySubId : null,
+      } as any) : u));
+    } catch (err: any) {
+      await Swal.fire({
+        icon: "error",
+        title: "Cancel failed",
+        text:  err.message || "Unknown error",
+        confirmButtonColor: "#7c3aed",
+      });
+    } finally {
+      setCancellingUid(null);
+    }
+  };
+
   const creatorSummaries: CreatorSummary[] = useMemo(() => {
     return creators
       .map(c => ({
@@ -152,6 +235,8 @@ export default function AdminPage() {
         fans:          subsPerCreator[c.uid] || 0,
         totalEarnings: (c as any).totalEarnings   || 0,
         creatorNet:    (c as any).totalCreatorNet || 0,
+        stripeSubId:   (c as any).platformPlanStripeSubId   ?? null,
+        razorpaySubId: (c as any).platformPlanRazorpaySubId ?? null,
       }))
       .sort((a, b) => b.totalEarnings - a.totalEarnings);
   }, [creators, subsPerCreator]);
@@ -256,10 +341,14 @@ export default function AdminPage() {
                     <th style={{ padding: "10px 12px", borderBottom: "1px solid #f3f4f6", textAlign: "right" }}>Fans</th>
                     <th style={{ padding: "10px 12px", borderBottom: "1px solid #f3f4f6", textAlign: "right" }}>Gross</th>
                     <th style={{ padding: "10px 12px", borderBottom: "1px solid #f3f4f6", textAlign: "right" }}>Net</th>
+                    <th style={{ padding: "10px 12px", borderBottom: "1px solid #f3f4f6", textAlign: "right" }}>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {creatorSummaries.map(c => (
+                  {creatorSummaries.map(c => {
+                    const hasActiveSub = !!(c.stripeSubId || c.razorpaySubId);
+                    const subGateway = c.razorpaySubId ? "razorpay" : c.stripeSubId ? "stripe" : null;
+                    return (
                     <tr key={c.uid} style={{ borderBottom: "1px solid #f3f4f6" }}>
                       <td style={{ padding: "12px" }}>
                         <div style={{ fontWeight: 700, color: "#111827" }}>{c.displayName}</div>
@@ -273,12 +362,40 @@ export default function AdminPage() {
                           fontWeight: 700, fontSize: "0.72rem",
                           textTransform: "uppercase", letterSpacing: "0.04em",
                         }}>{planLabel(c.plan)}</span>
+                        {subGateway && (
+                          <div style={{ color: "#9ca3af", fontSize: "0.68rem", marginTop: 4, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                            via {subGateway}
+                          </div>
+                        )}
                       </td>
                       <td style={{ padding: "12px", textAlign: "right", fontWeight: 700 }}>{fmtInt(c.fans)}</td>
                       <td style={{ padding: "12px", textAlign: "right" }}>{fmt$(c.totalEarnings)}</td>
                       <td style={{ padding: "12px", textAlign: "right", fontWeight: 700, color: "#10b981" }}>{fmt$(c.creatorNet)}</td>
+                      <td style={{ padding: "12px", textAlign: "right" }}>
+                        {hasActiveSub ? (
+                          <button
+                            onClick={() => handleCancelUserSub(c)}
+                            disabled={cancellingUid === c.uid}
+                            style={{
+                              padding: "5px 12px", borderRadius: 8,
+                              border: "1px solid #fca5a5",
+                              background: cancellingUid === c.uid ? "#fef2f2" : "#fff",
+                              color: "#b91c1c",
+                              fontSize: "0.78rem", fontWeight: 700,
+                              cursor: cancellingUid === c.uid ? "wait" : "pointer",
+                              whiteSpace: "nowrap",
+                            }}
+                            title={`Cancel this creator's ${subGateway} subscription`}
+                          >
+                            {cancellingUid === c.uid ? "Cancelling…" : "Cancel Sub"}
+                          </button>
+                        ) : (
+                          <span style={{ color: "#d1d5db", fontSize: "0.78rem" }}>—</span>
+                        )}
+                      </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -329,14 +446,14 @@ export default function AdminPage() {
           )}
         </section>
 
-        {/* BUG REPORTS */}
+        {/* REPORTS & FEEDBACK */}
         <section style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 20, padding: "1.5rem", marginTop: 28, boxShadow: "0 4px 12px rgba(0,0,0,0.04)" }}>
           <h2 style={{ fontFamily: "'Outfit', sans-serif", fontSize: "1.15rem", fontWeight: 800, margin: "0 0 4px" }}>
-            Bug Reports · {fmtInt(bugs.length)}
+            Reports &amp; Feedback · {fmtInt(bugs.length)}
           </h2>
           <p style={{ color: "#6b7280", fontSize: "0.85rem", margin: "0 0 16px" }}>
-            Latest 50 reports submitted from the in-app &ldquo;Something went wrong&rdquo; modal.
-            Each row shows who hit it, the underlying error, and what the user typed.
+            Latest 50 entries from the in-app feedback widget — both 🐞 Bug Reports and 💡 Feedback.
+            Each row shows who submitted it, the underlying error (if a bug), and what the user typed.
             Click a row to expand the full stack trace + user-agent.
           </p>
 
@@ -377,24 +494,37 @@ export default function AdminPage() {
                           {b.url && <> · <span style={{ color: "#9ca3af" }}>{b.url.replace(/^https?:\/\/[^/]+/, "")}</span></>}
                         </div>
                       </div>
-                      <span style={{
-                        padding: "2px 8px", borderRadius: 99,
-                        background: b.status === "pending" ? "#fef3c7" : "#dcfce7",
-                        color:      b.status === "pending" ? "#92400e" : "#166534",
-                        fontSize: "0.7rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em",
-                      }}>{b.status}</span>
+                      <div style={{ display: "flex", gap: 6, alignItems: "center", flexShrink: 0 }}>
+                        {/* Type badge — distinguishes 💡 feedback from 🐞 bug */}
+                        <span style={{
+                          padding: "2px 8px", borderRadius: 99,
+                          background: b.type === "feedback" ? "#dbeafe" : "#fee2e2",
+                          color:      b.type === "feedback" ? "#1e40af" : "#991b1b",
+                          fontSize: "0.7rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em",
+                        }}>{b.type === "feedback" ? "💡 Feedback" : "🐞 Bug"}</span>
+                        <span style={{
+                          padding: "2px 8px", borderRadius: 99,
+                          background: b.status === "pending" ? "#fef3c7" : "#dcfce7",
+                          color:      b.status === "pending" ? "#92400e" : "#166534",
+                          fontSize: "0.7rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em",
+                        }}>{b.status}</span>
+                      </div>
                     </div>
 
-                    {/* Error one-liner */}
-                    <div style={{
-                      marginTop: 8, padding: "6px 10px",
-                      background: "#fff", border: "1px solid #fecaca",
-                      borderRadius: 8, fontFamily: "monospace", fontSize: "0.78rem",
-                      color: "#b91c1c", overflow: "hidden", textOverflow: "ellipsis",
-                      whiteSpace: expanded ? "pre-wrap" : "nowrap",
-                    }}>
-                      {b.errorName ? `${b.errorName}: ` : ""}{b.errorMessage || "(no error message)"}
-                    </div>
+                    {/* Error one-liner — only relevant for bug reports. Feedback
+                        entries have no stack/error fields, so suppress the red
+                        box entirely instead of showing "(no error message)". */}
+                    {b.type !== "feedback" && (
+                      <div style={{
+                        marginTop: 8, padding: "6px 10px",
+                        background: "#fff", border: "1px solid #fecaca",
+                        borderRadius: 8, fontFamily: "monospace", fontSize: "0.78rem",
+                        color: "#b91c1c", overflow: "hidden", textOverflow: "ellipsis",
+                        whiteSpace: expanded ? "pre-wrap" : "nowrap",
+                      }}>
+                        {b.errorName ? `${b.errorName}: ` : ""}{b.errorMessage || "(no error message)"}
+                      </div>
+                    )}
 
                     {/* User note */}
                     {b.message && b.message !== "(no user note provided)" && (

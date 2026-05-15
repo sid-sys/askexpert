@@ -50,3 +50,6 @@ next-env.d.ts
 
 # Local Claude Code workspace config
 .claude/
+
+# Gemini App Data
+.gemini/

@@ -14,7 +14,7 @@
 - **Environment Restoration**: Ran `npm install` to synchronize dependencies and successfully started the local development server on `http://localhost:3000`. Confirmed the home page loads correctly.
 
 ## Architecture & Navigation
-- **Settings Consolidation**: Unified "Edit Page," "Pricing," and "Payout" into a single, popover-style "Settings" menu within the bottom navigation bar on mobile (≤900px). This was done to prevent clutter on small screens where too many bottom nav items were getting cut off (specifically on < 500px).
+- **Settings Consolidation**: Unified "Edit Page," "Pricing," and "Payout" into a single, popover-style "Settings" menu within the bottom navigation bar on mobile (â‰¤900px). This was done to prevent clutter on small screens where too many bottom nav items were getting cut off (specifically on < 500px).
 - **Menu Cleanup**: Removed individual navigation links for the sub-settings to prevent clutter. The active indicator logic was updated so that selecting any sub-setting (Edit/Pricing/Payout) highlights the "Settings" button rather than the profile avatar.
 - **Feedback Integration**: Moved the global "Feedback" trigger into the authenticated User Profile popover menu on the bottom nav, effectively reducing surface-level UI clutter on mobile.
 - **Top Right Navigation for Mobile**: Kept "View Profile" and "Copy Link" buttons in the dashboard's top right header (`NavBar.tsx`) for authenticated users, avoiding burying them inside the `BottomNav` profile menu. This ensures users have immediate access to sharing tools on mobile devices.
@@ -43,6 +43,10 @@
 
 
 ## Static Generation & Suspense Boundaries
-- **Prerendering Fixes**: Wrapped the client components in \pp/fan-dashboard/page.tsx\ and \pp/upgrade/page.tsx\ with React \<Suspense>\ boundaries. Next.js statically analyzes routes during \
-ext build\, and using \useSearchParams\ in an un-Suspended client component causes the build to fail if the route isn't explicitly marked as dynamic. By wrapping the content in \<Suspense>\, we ensure the build succeeds and the components stream in on the client side properly.
+- **Prerendering Fixes**: Wrapped the client components in `app/fan-dashboard/page.tsx` and `app/upgrade/page.tsx` with React `<Suspense>` boundaries. Next.js statically analyzes routes during `next build`, and using `useSearchParams` in an un-Suspended client component causes the build to fail if the route isn't explicitly marked as dynamic. By wrapping the content in `<Suspense>`, we ensure the build succeeds and the components stream in on the client side properly.
 
+
+## Netlify Deployment & Bundling (2026-05-13)
+- **Deployment via CLI**: Successfully deployed the project directly to Netlify without connecting to GitHub using the Netlify CLI.
+- **Windows Path Bug**: Fixed Netlify deployment server handler crash caused by Windows backslashes (`\`) in paths by creating a `fix_netlify_paths.js` script to sanitize paths and re-deploying without rebuilding.
+- **Sentry Internal Server Error**: Resolved an Sentry Instrumentation error where `require-in-the-middle` was missing during production deployment. Fixed by updating `next.config.ts` to include `require-in-the-middle` and `@sentry/nextjs` in `serverExternalPackages`.

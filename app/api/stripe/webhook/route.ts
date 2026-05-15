@@ -557,6 +557,54 @@ export async function POST(req: NextRequest) {
   }
 
   // ─────────────────────────────────────────────────────────────────────────
+  // 4b. invoice.payment_failed — Card declined / dunning. Flag the affected
+  // subscription as past_due so the UI can surface it. Stripe will keep
+  // retrying per its Smart Retries config; a final failure fires
+  // customer.subscription.deleted which our existing handler picks up.
+  // ─────────────────────────────────────────────────────────────────────────
+  if (event.type === "invoice.payment_failed") {
+    const invoice = event.data.object as Stripe.Invoice;
+    const subId   = (invoice as unknown as { subscription?: string | null }).subscription ?? null;
+    if (!subId) return NextResponse.json({ ok: true });
+
+    // 4b-i. Creator's own platform plan
+    const creatorSnap = await adminDb
+      .collection("users")
+      .where("platformPlanStripeSubId", "==", subId)
+      .limit(1)
+      .get();
+    if (!creatorSnap.empty) {
+      const creatorDoc = creatorSnap.docs[0];
+      await creatorDoc.ref.set(
+        {
+          platformPlanPastDue: true,
+          platformPlanLastPaymentFailedAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true }
+      );
+      console.log(`⚠️  Platform plan payment failed for ${creatorDoc.id} (sub ${subId})`);
+      return NextResponse.json({ ok: true });
+    }
+
+    // 4b-ii. Fan → creator subscription
+    const fanSubSnap = await adminDb
+      .collection("subscriptions")
+      .where("stripeSubscriptionId", "==", subId)
+      .limit(1)
+      .get();
+    if (!fanSubSnap.empty) {
+      const subDoc = fanSubSnap.docs[0];
+      await subDoc.ref.update({
+        status: "past_due",
+        lastPaymentFailedAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      console.log(`⚠️  Fan subscription ${subId} marked past_due.`);
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
   // 5. account.updated — Stripe Connect onboarding status change
   // ─────────────────────────────────────────────────────────────────────────
   if (event.type === "account.updated") {

@@ -44,7 +44,12 @@ function AuthForm() {
   const selectedPlan = searchParams.get("plan")?.toLowerCase() ?? "";
   const PAID_PLANS = ["creator", "pro"];
 
-  /** After signup, redirect to Stripe if a paid plan was selected */
+  /** After signup, redirect to Stripe if a paid plan was selected.
+   * Note: at signup the user has no `currency` field yet, so we can't route
+   * to Razorpay here. Indian creators who select a plan during signup will
+   * land in Stripe (USD); after first login they should set INR in their
+   * profile and re-upgrade via /upgrade, which routes correctly.
+   */
   const redirectToPlanCheckout = async (uid: string, userEmail: string, plan: string) => {
     if (!PAID_PLANS.includes(plan)) return;
     try {
@@ -272,7 +277,7 @@ function AuthForm() {
           {view === "login" && (
             <form onSubmit={handleLogin} style={formWrap}>
               <Field label="Email address">
-                <input id="auth-email" className="input-brutal" type="email" placeholder="you@domain.com"
+                <input id="auth-email" className="input-brutal" type="email" placeholder="your email"
                   value={email} onChange={(e) => { setEmail(e.target.value); setError(""); }} required autoComplete="email" />
               </Field>
               <Field label="Password">
@@ -307,7 +312,7 @@ function AuthForm() {
                     value={username} onChange={(e) => setUsername(e.target.value)} required autoComplete="username" />
                 </Field>
                 <Field label="Email address">
-                  <input id="auth-email-su" className="input-brutal" type="email" placeholder="you@domain.com"
+                  <input id="auth-email-su" className="input-brutal" type="email" placeholder="your email"
                     value={email} onChange={(e) => setEmail(e.target.value)} required autoComplete="email" />
                 </Field>
               </div>
@@ -383,7 +388,7 @@ function AuthForm() {
                 </p>
               </div>
               <Field label="Email address">
-                <input id="forgot-email" className="input-brutal" type="email" placeholder="you@domain.com"
+                <input id="forgot-email" className="input-brutal" type="email" placeholder="your email"
                   value={email} onChange={(e) => setEmail(e.target.value)} required autoComplete="email" />
               </Field>
               {error && <ErrorBox msg={error} />}

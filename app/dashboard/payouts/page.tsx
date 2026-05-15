@@ -6,20 +6,18 @@ import Link from "next/link";
 import { collection, getDocs, query, orderBy, where } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/context/AuthContext";
+import { formatMoney } from "@/lib/money";
 
 interface Payout {
   id: string;
   creatorId: string;
-  amount: number; // in cents
+  amount: number;           // minor units (cents OR paise depending on currency)
+  currency?: string;        // "usd" | "inr" | etc. — written by both webhooks
   createdAt: any;
   status: "pending" | "paid" | "cancelled";
   paymentMethod?: string;
   bankDetails?: string;
   reference?: string;
-}
-
-function fmt$( cents: number ) {
-  return "$" + (cents / 100).toFixed(2);
 }
 
 function timeFmt( ts: any ): string {
@@ -129,7 +127,7 @@ export default function PayoutHistoryPage() {
                     payouts.map(p => (
                       <tr key={p.id} style={{ borderBottom: "1px solid #f3f4f6" }}>
                         <td style={{ padding: "16px", fontSize: "0.85rem", color: "#4b5563" }}>{timeFmt(p.createdAt)}</td>
-                        <td style={{ padding: "16px", fontSize: "0.95rem", fontWeight: 800, color: "#10b981" }}>{fmt$(p.amount)}</td>
+                        <td style={{ padding: "16px", fontSize: "0.95rem", fontWeight: 800, color: "#10b981" }}>{formatMoney(p.amount, p.currency)}</td>
                         <td style={{ padding: "16px", fontSize: "0.85rem", color: "#4b5563" }}>
                           {p.paymentMethod} {maskBank(p.bankDetails)}
                         </td>

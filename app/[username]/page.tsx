@@ -121,11 +121,39 @@ export default function CreatorProfilePage({ params }: { params: Promise<{ usern
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [email,       setEmail]       = useState("");
   const [name,        setName]        = useState("");
+  // Optional fan phone — only rendered for INR creators since it's
+  // forwarded to Razorpay's prefill.contact to skip the modal's phone
+  // prompt. Empty string is fine (modal will ask the fan instead).
+  const [phone,       setPhone]       = useState("");
   const [submitting,  setSubmitting]  = useState(false);
   const [submitted,   setSubmitted]   = useState(false);
 
+  // Visitor country detection — used to show a one-line warning to Indian
+  // fans when the creator is priced in USD/etc. (Razorpay can't process
+  // those currencies, so the fan goes through Stripe and may hit RBI
+  // e-mandate / international-card-disabled issues). Cached per-creator
+  // dismissal lives in localStorage so it doesn't nag on every visit.
+  const [visitorCountry,   setVisitorCountry]   = useState<string | null>(null);
+  const [crossBorderDismissed, setCrossBorderDismissed] = useState(false);
+
   const { user, userProfile } = useAuth();
   const router = useRouter();
+
+  useEffect(() => {
+    let cancelled = false;
+    // Local dev / QA: append ?country=IN to the URL to force-render the
+    // cross-border banner without an actual IP from India. Skipped in
+    // prod traffic since regular fans don't append that param.
+    const forced = typeof window !== "undefined"
+      ? new URLSearchParams(window.location.search).get("country")
+      : null;
+    const url = forced ? `/api/geo?force=${encodeURIComponent(forced)}` : "/api/geo";
+    fetch(url)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (!cancelled && d?.country) setVisitorCountry(d.country); })
+      .catch(() => { /* dev / offline — banner just won't render */ });
+    return () => { cancelled = true; };
+  }, []);
 
   // Pre-fill user info if logged in
   useEffect(() => {
@@ -356,14 +384,28 @@ export default function CreatorProfilePage({ params }: { params: Promise<{ usern
     }
     setSubmitting(true);
     try {
-      const res = await fetch("/api/stripe/checkout", {
+      // Gateway routing: INR-priced creators → Razorpay (modal), everyone
+      // else → Stripe (redirect). See lib/razorpay-client.ts for modal API.
+      const useRazorpay = ((display as any)?.currency || "usd").toLowerCase() === "inr";
+      const endpoint = useRazorpay ? "/api/razorpay/checkout" : "/api/stripe/checkout";
+      const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           creatorId: display!.uid,
           content: "Monthly subscription",
           followerEmail: email || (userProfile as any)?.email || user.email || "",
-          followerName: name || (userProfile as any)?.displayName || "Fan",
+          // Extended fallback chain — earlier it stopped at displayName which
+          // is often empty for Google-signin fans, leaving the creator's
+          // subscriber list / chat showing the literal word "Fan". Now we
+          // fall through username → email-prefix → "Fan" so we always have
+          // *something* personalised.
+          followerName:
+            name
+            || (userProfile as any)?.displayName
+            || (userProfile as any)?.username
+            || ((userProfile as any)?.email || user.email || "").split("@")[0]
+            || "Fan",
           mode: "monthly",
           price: display!.monthlyPrice,
           stripeAccountId: (display as any).stripeAccountId ?? null,
@@ -372,7 +414,17 @@ export default function CreatorProfilePage({ params }: { params: Promise<{ usern
         }),
       });
       const data = await res.json();
-      if (data.url) {
+      if (useRazorpay && data.subscriptionId) {
+        const { openRazorpaySubscription } = await import("@/lib/razorpay-client");
+        await openRazorpaySubscription({
+          subscriptionId: data.subscriptionId,
+          keyId:          data.keyId,
+          name:           "AskExpert",
+          description:    `Monthly subscription to ${(display as any)?.displayName ?? "creator"}`,
+          prefill:        data.prefill,
+          successRedirect: `/fan-dashboard?subscribed=1`,
+        });
+      } else if (data.url) {
         window.location.href = data.url;
       } else {
         Swal.fire({ title: "Payment Error", text: data.error || "Payment setup failed.", icon: "error", confirmButtonColor: "var(--purple)" });
@@ -520,7 +572,11 @@ export default function CreatorProfilePage({ params }: { params: Promise<{ usern
         }
       }
 
-      const res = await fetch("/api/stripe/checkout", {
+      // Gateway routing: INR-priced creators → Razorpay (modal), everyone
+      // else → Stripe (redirect). Same branch as the subscribe button above.
+      const useRazorpay = ((display as any)?.currency || "usd").toLowerCase() === "inr";
+      const endpoint = useRazorpay ? "/api/razorpay/checkout" : "/api/stripe/checkout";
+      const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -528,6 +584,9 @@ export default function CreatorProfilePage({ params }: { params: Promise<{ usern
           content,
           followerEmail:   email.trim(),
           followerName:    name.trim(),
+          // Forward phone only when present — Razorpay uses it for
+          // prefill.contact; Stripe ignores it.
+          followerPhone:   phone.trim() || undefined,
           mode:            payMode,
           price,
           stripeAccountId: display.stripeAccountId ?? null,
@@ -537,7 +596,31 @@ export default function CreatorProfilePage({ params }: { params: Promise<{ usern
       });
 
       const data = await res.json();
-      if (data.url) {
+      if (useRazorpay && (data.orderId || data.subscriptionId)) {
+        if (data.orderId) {
+          const { openRazorpayOneTime } = await import("@/lib/razorpay-client");
+          await openRazorpayOneTime({
+            orderId:   data.orderId,
+            keyId:     data.keyId,
+            amount:    data.amount,
+            currency:  data.currency,
+            name:      "AskExpert",
+            description: `Question to ${display.displayName ?? "creator"}`,
+            prefill:   data.prefill,
+            successRedirect: `/success?question_id=${data.questionId}`,
+          });
+        } else {
+          const { openRazorpaySubscription } = await import("@/lib/razorpay-client");
+          await openRazorpaySubscription({
+            subscriptionId: data.subscriptionId,
+            keyId:          data.keyId,
+            name:           "AskExpert",
+            description:    `Monthly subscription to ${display.displayName ?? "creator"}`,
+            prefill:        data.prefill,
+            successRedirect: `/fan-dashboard?subscribed=1`,
+          });
+        }
+      } else if (data.url) {
         window.location.href = data.url;
       } else {
         Swal.fire({
@@ -595,15 +678,22 @@ export default function CreatorProfilePage({ params }: { params: Promise<{ usern
         justifyContent: "space-between", gap: 12,
       }}>
 
-        {/* Logo */}
+        {/* Logo — matches the global NavBar (which uses /logo.png). The
+            old inline skull-emoji placeholder lingered here because this
+            page mounts its own header instead of the shared NavBar. */}
         <a href="/" style={{ textDecoration: "none", display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-          <div style={{
-            width: 30, height: 30,
-            background: "linear-gradient(135deg, #7c3aed, #a855f7)",
-            borderRadius: 8, display: "flex", alignItems: "center",
-            justifyContent: "center", fontSize: "1rem",
-            boxShadow: "0 2px 8px rgba(124,58,237,0.35)",
-          }}>&#x1F480;</div>
+          <img
+            src="/logo.png"
+            alt="AskExpert"
+            width={30}
+            height={30}
+            style={{
+              borderRadius: 8,
+              display: "block",
+              boxShadow: "0 2px 8px rgba(124,58,237,0.35)",
+              objectFit: "cover",
+            }}
+          />
           <span style={{
             fontFamily: "'Outfit', sans-serif",
             fontWeight: 800, fontSize: "1.05rem", color: "#1f2937",
@@ -922,6 +1012,72 @@ export default function CreatorProfilePage({ params }: { params: Promise<{ usern
         </div>
       )}
 
+      {/* ── Cross-border warning banner ─────────────────────────
+          Indian fans on a non-INR creator profile get a heads-up that
+          Razorpay isn't available for this charge and their bank may
+          decline international transactions. The banner dismisses
+          per-creator in localStorage so it doesn't nag on every visit. */}
+      {visitorCountry === "IN"
+        && display
+        && ((display as any).currency || "usd").toLowerCase() !== "inr"
+        && !crossBorderDismissed
+        && (() => {
+          // Lazy-read localStorage so SSR doesn't blow up. Once we know the
+          // creator + visitor combo, check whether the fan has dismissed
+          // this banner for THIS creator before.
+          if (typeof window !== "undefined") {
+            const key = `xborder-dismissed-${display.uid}`;
+            try {
+              if (localStorage.getItem(key) === "1") {
+                // setState during render is a no-no, so defer.
+                queueMicrotask(() => setCrossBorderDismissed(true));
+                return null;
+              }
+            } catch { /* localStorage disabled — show banner */ }
+          }
+          const currencyLabel = ((display as any).currency || "USD").toUpperCase();
+          return (
+            <div style={{
+              maxWidth: 720, margin: "0 auto 18px",
+              padding: "14px 18px",
+              background: "linear-gradient(135deg, #fef3c7, #fffbeb)",
+              border: "2px solid #fbbf24",
+              borderRadius: 14,
+              display: "flex", gap: 12, alignItems: "flex-start",
+            }}>
+              <span style={{ fontSize: "1.3rem", flexShrink: 0 }}>🇮🇳</span>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontFamily: "var(--font-main)", fontWeight: 800, color: "#92400e", fontSize: "0.92rem", marginBottom: 4 }}>
+                  Paying from India? Heads-up
+                </div>
+                <div style={{ color: "#78350f", fontSize: "0.83rem", lineHeight: 1.5 }}>
+                  This creator charges in <strong>{currencyLabel}</strong>, so checkout
+                  goes through Stripe. Most Indian banks block international card
+                  transactions by default — enable them in your bank app first.
+                  Monthly subscriptions on Indian cards may also be declined due to
+                  RBI mandate rules; one-time questions usually work fine.
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setCrossBorderDismissed(true);
+                  try {
+                    if (typeof window !== "undefined" && display) {
+                      localStorage.setItem(`xborder-dismissed-${display.uid}`, "1");
+                    }
+                  } catch { /* ignore */ }
+                }}
+                aria-label="Dismiss"
+                style={{
+                  background: "none", border: "none", color: "#92400e",
+                  fontSize: "1.1rem", cursor: "pointer", fontWeight: 800,
+                  padding: "0 4px", flexShrink: 0, lineHeight: 1,
+                }}
+              >✕</button>
+            </div>
+          );
+        })()}
+
       {/* ══════════════════════════════════════════════════════ */}
       {/* SECTION 4 — PRICING                                   */}
       {/* ══════════════════════════════════════════════════════ */}
@@ -1205,6 +1361,28 @@ export default function CreatorProfilePage({ params }: { params: Promise<{ usern
               />
             </div>
 
+            {/* Phone — INR creators only. Razorpay needs it for UPI/EMI,
+               and prefilling here skips the modal's contact prompt. */}
+            {((display as any)?.currency || "").toLowerCase() === "inr" && (
+              <div>
+                <label style={{ display: "block", color: "var(--muted)", fontSize: "0.78rem", fontWeight: 700, textTransform: "uppercase", marginBottom: 6 }}>
+                  Phone (optional)
+                </label>
+                <input
+                  className="input-brutal"
+                  type="tel"
+                  placeholder="10-digit Indian mobile (e.g. 9999999999)"
+                  value={phone}
+                  onChange={e => setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
+                  pattern="[6-9][0-9]{9}"
+                  inputMode="numeric"
+                />
+                <p style={{ color: "var(--muted)", fontSize: "0.72rem", marginTop: 4 }}>
+                  Optional — speeds up checkout. Required by Razorpay for UPI.
+                </p>
+              </div>
+            )}
+
             {/* Price summary — only when Stripe is ready */}
             {display.stripeOnboardingComplete && (
               <div style={{
@@ -1219,7 +1397,7 @@ export default function CreatorProfilePage({ params }: { params: Promise<{ usern
                 <span style={{ color: "var(--purple)", fontWeight: 900, fontSize: "1.15rem" }}>
                   {isSubscribed && payMode === "monthly" ? "FREE" : (
                     <>
-                      ${((payMode === "one-time" ? (display.perQuestionPrice || 0) : (display.monthlyPrice || 0)) / 100).toFixed(2)}
+                      {currencySymbol}{((payMode === "one-time" ? (display.perQuestionPrice || 0) : (display.monthlyPrice || 0)) / 100).toFixed(2)}
                       {payMode === "monthly" && <span style={{ fontSize: "0.75rem", fontWeight: 600 }}>/mo</span>}
                     </>
                   )}
@@ -1262,7 +1440,7 @@ export default function CreatorProfilePage({ params }: { params: Promise<{ usern
             </button>
 
             <p style={{ color: "var(--muted)", fontSize: "0.74rem", textAlign: "center", margin: 0 }}>
-              Auto-refunded if not answered within {slaLabel}. Powered by Stripe. 🔒
+              Auto-refunded if not answered within {slaLabel}. Powered by {((display as any)?.currency || "").toLowerCase() === "inr" ? "Razorpay" : "Stripe"}. 🔒
             </p>
           </form>
         )}

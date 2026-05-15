@@ -97,8 +97,73 @@ function FanDashboardContent() {
     return () => { document.body.style.overflow = prev; };
   }, [fanChatOverlayActive]);
 
-  const handleManageSubscription = async () => {
+  // Manage a specific subscription. Routes by the sub's gateway:
+  //   • razorpay → in-app cancel dialog (Razorpay has no hosted portal)
+  //   • stripe   → Stripe's hosted billing portal as before
+  // The optional `sub` arg is what the per-row "Manage" button passes; when
+  // it's missing we fall back to Stripe (preserves the old behaviour for any
+  // generic "manage all" entry points).
+  const handleManageSubscription = async (sub?: any) => {
     if (!user) return;
+
+    if (sub?.gateway === "razorpay") {
+      const choice = await Swal.fire({
+        icon: "warning",
+        title: `Cancel your subscription to ${sub.creatorName || "this creator"}?`,
+        html: `
+          <div style="text-align:left; font-size:0.92rem; line-height:1.55;">
+            <strong>Cancel at cycle end</strong> — keep access until your next billing date.<br/>
+            <strong>Cancel now</strong> — immediate cancellation, no refund for unused days.
+          </div>
+        `,
+        showDenyButton: true,
+        showCancelButton: true,
+        confirmButtonText: "Cancel at cycle end",
+        denyButtonText:    "Cancel now",
+        cancelButtonText:  "Keep subscribed",
+        confirmButtonColor: "#7c3aed",
+        denyButtonColor:    "#ef4444",
+        cancelButtonColor:  "#6b7280",
+        reverseButtons: true,
+      });
+      if (choice.isDismissed) return;
+      const cancelAtCycleEnd = !choice.isDenied;
+
+      setPortalLoading(true);
+      try {
+        const { getIdToken } = await import("firebase/auth");
+        const token = await getIdToken(user as any);
+        const res = await fetch("/api/razorpay/cancel-fan-subscription", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ subscriptionId: sub.id, cancelAtCycleEnd }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Cancel failed");
+
+        await Swal.fire({
+          icon: "success",
+          title: cancelAtCycleEnd ? "Cancellation scheduled" : "Subscription cancelled",
+          text:  cancelAtCycleEnd
+            ? "You'll keep access until your current billing period ends."
+            : "Your subscription has ended.",
+          confirmButtonColor: "var(--purple)",
+        });
+        // The onSnapshot listener in this file will refresh the row state.
+      } catch (err: any) {
+        Swal.fire({
+          title: "Couldn't cancel subscription",
+          text: err.message || "Try again in a moment.",
+          icon: "error",
+          confirmButtonColor: "var(--purple)",
+        });
+      } finally {
+        setPortalLoading(false);
+      }
+      return;
+    }
+
+    // Stripe path (default) — unchanged.
     setPortalLoading(true);
     try {
       const { getIdToken } = await import("firebase/auth");
@@ -190,11 +255,14 @@ function FanDashboardContent() {
       });
     };
 
+    // Load ALL of this fan's subscriptions (active + cancelled + past_due).
+    // The /subscriptions tab now shows cancelled ones too with a "Resubscribe"
+    // CTA. Lists that should only see active subs (chat, home preview)
+    // filter client-side via subscriptions.filter(s => s.status === "active").
     const subsUnsub = onSnapshot(
       query(
         collection(db, COLLECTIONS.SUBSCRIPTIONS),
         where("followerId", "==", user.uid),
-        where("status", "==", "active"),
       ),
       async (snap) => {
         const raw = snap.docs.map((d) => ({ id: d.id, ...d.data() } as Subscription));
@@ -638,23 +706,27 @@ function FanDashboardContent() {
 
                 {/* Two-column body */}
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, alignItems: "start" }}>
-                  {/* Left – Your Conversations (chat-first) */}
+                  {/* Left – Your Conversations (chat-first). Filter to active
+                      subs only — cancelled subs live on the /subscriptions tab
+                      under a "Resubscribe" CTA, not here. */}
                   {card(<>
                     {sectionTitle("Your Conversations")}
-                    {loading
+                    {(() => {
+                      const activeForHome = subscriptions.filter(s => s.status === "active");
+                      return loading
                       ? <div style={{ textAlign: "center", padding: 40, color: "#9ca3af", fontFamily: "'Outfit',sans-serif" }}>Loading…</div>
-                      : subscriptions.length === 0
+                      : activeForHome.length === 0
                         ? emptyState("💬", "Subscribe to a creator to start chatting.", { label: "Find Creators →", nav: "discover" })
                         : <div style={{ marginTop: -8 }}>
-                            {subscriptions.slice(0, 6).map((sub) => (
+                            {activeForHome.slice(0, 6).map((sub) => (
                               <HomeChatRow
                                 key={sub.id}
                                 sub={sub}
                                 onOpenChat={() => { setSelectedChatSub(sub.id); go("questions"); }}
                               />
                             ))}
-                          </div>
-                    }
+                          </div>;
+                    })()}
                     {subscriptions.length > 0 && (
                       <button onClick={() => go("subscriptions")} style={{ background: "none", border: "none", color: "#7c3aed", fontWeight: 700, fontSize: "0.82rem", cursor: "pointer", paddingTop: 12, fontFamily: "'Outfit',sans-serif" }}>
                         Manage subscriptions →
@@ -727,27 +799,64 @@ function FanDashboardContent() {
             )}
 
             {/* SUBSCRIPTIONS */}
-            {activeNav === "subscriptions" && (
+            {activeNav === "subscriptions" && (() => {
+              const activeSubs    = subscriptions.filter(s => s.status === "active");
+              const inactiveSubs  = subscriptions.filter(s => s.status !== "active");
+              return (
               <>
                 <div style={{ marginBottom: 24 }}>
                   <h1 style={{ fontFamily: "'Outfit',sans-serif", fontWeight: 800, fontSize: "clamp(1.5rem,3vw,2rem)", color: "#111", margin: "0 0 4px" }}>My Subscriptions</h1>
-                  <p style={{ fontFamily: "'Outfit',sans-serif", color: "#888", fontSize: "0.9rem", margin: 0 }}>{loading ? "…" : `${subscriptions.length} active ${subscriptions.length === 1 ? "subscription" : "subscriptions"}`}</p>
+                  <p style={{ fontFamily: "'Outfit',sans-serif", color: "#888", fontSize: "0.9rem", margin: 0 }}>
+                    {loading ? "…" : `${activeSubs.length} active ${activeSubs.length === 1 ? "subscription" : "subscriptions"}`}
+                    {!loading && inactiveSubs.length > 0 && (
+                      <span style={{ color: "#9ca3af" }}> · {inactiveSubs.length} cancelled / past</span>
+                    )}
+                  </p>
                 </div>
                 {loading ? (
                   <div style={{ textAlign: "center", padding: 60, color: "#9ca3af", fontFamily: "'Outfit',sans-serif" }}>Loading…</div>
                 ) : subscriptions.length === 0 ? card(emptyState("⭐", "No active subscriptions yet.", { label: "Find Creators →", nav: "discover" }))
-                  : subscriptions.map((sub) => (
-                    <FanSubscriptionRow
-                      key={sub.id}
-                      sub={sub}
-                      onOpenChat={() => { setSelectedChatSub(sub.id); go("questions"); }}
-                      onManage={handleManageSubscription}
-                      portalLoading={portalLoading}
-                    />
-                  ))
+                  : (
+                    <>
+                      {activeSubs.map((sub) => (
+                        <FanSubscriptionRow
+                          key={sub.id}
+                          sub={sub}
+                          onOpenChat={() => { setSelectedChatSub(sub.id); go("questions"); }}
+                          onManage={handleManageSubscription}
+                          portalLoading={portalLoading}
+                        />
+                      ))}
+
+                      {inactiveSubs.length > 0 && (
+                        <div style={{ marginTop: 32, marginBottom: 12 }}>
+                          <h2 style={{ fontFamily: "'Outfit',sans-serif", fontWeight: 800, fontSize: "1.05rem", color: "#374151", margin: "0 0 4px" }}>
+                            Past subscriptions
+                          </h2>
+                          <p style={{ fontFamily: "'Outfit',sans-serif", color: "#9ca3af", fontSize: "0.82rem", margin: 0 }}>
+                            Resubscribe to start chatting with these creators again.
+                          </p>
+                        </div>
+                      )}
+                      {inactiveSubs.map((sub) => (
+                        <CancelledSubscriptionRow
+                          key={sub.id}
+                          sub={sub}
+                          onResubscribe={() => {
+                            // Send the fan back to the creator's profile to
+                            // re-checkout. The Subscribe button there routes
+                            // by creator.currency (INR → Razorpay, else Stripe).
+                            const slug = sub.creatorUsername || sub.creatorId;
+                            router.push(`/${slug}`);
+                          }}
+                        />
+                      ))}
+                    </>
+                  )
                 }
               </>
-            )}
+              );
+            })()}
 
             {/* QUESTIONS — two-pane chat: subscribed creators | thread */}
             {activeNav === "questions" && (() => {
@@ -821,6 +930,17 @@ function FanDashboardContent() {
                               counterpartInitial={(current.creatorName || current.creatorUsername || "?")[0]}
                               height={mobileInChat ? "100%" : 560}
                               onBack={isChatMobile ? () => setSelectedChatSub(null) : undefined}
+                              // Seal the thread when the sub isn't active.
+                              // Status flips to "cancelled" / "past_due" the
+                              // moment Razorpay/Stripe webhook fires (or our
+                              // optimistic write lands), and both sides lose
+                              // the input bar — replaced by a Resubscribe nudge.
+                              disabled={current.status !== "active"}
+                              disabledReason={
+                                current.status === "past_due"
+                                  ? "Your last payment failed."
+                                  : "Subscription cancelled."
+                              }
                             />
                           ) : (
                             <div style={{ background: "#fff", border: "1px solid #f0f0f0", borderRadius: 16, padding: 40, textAlign: "center", color: "#9ca3af" }}>
@@ -986,12 +1106,52 @@ function FanChatCreatorRow({
   );
 }
 
+// Renders a cancelled / past_due subscription with a Resubscribe CTA.
+// Chat-open is intentionally absent — the conversation is sealed until the
+// fan resubscribes. The button navigates to the creator's profile so the
+// existing currency-routed Subscribe flow handles checkout.
+function CancelledSubscriptionRow({
+  sub, onResubscribe,
+}: {
+  sub: Subscription;
+  onResubscribe: () => void;
+}) {
+  const statusLabel = sub.status === "past_due" ? "Past Due" : "Cancelled";
+  return (
+    <div style={{ background: "#fafafa", border: "1px dashed #e5e7eb", borderRadius: 16, padding: "20px 22px", marginBottom: 12 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+        <div style={{ width: 46, height: 46, borderRadius: "50%", background: "#e5e7eb", display: "grid", placeItems: "center", color: "#6b7280", fontFamily: "'Outfit',sans-serif", fontWeight: 800, fontSize: "0.95rem", flexShrink: 0 }}>
+          {(sub.creatorName || sub.creatorUsername || "?")[0].toUpperCase()}
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <p style={{ fontFamily: "'Outfit',sans-serif", fontWeight: 700, color: "#374151", fontSize: "0.95rem", marginBottom: 2 }}>{sub.creatorName || sub.creatorUsername || sub.creatorId}</p>
+          {sub.creatorUsername && <p style={{ fontFamily: "'Outfit',sans-serif", color: "#9ca3af", fontSize: "0.78rem", marginBottom: 8 }}>@{sub.creatorUsername}</p>}
+          <span style={{ background: "#f3f4f6", color: "#6b7280", borderRadius: 99, padding: "2px 10px", fontSize: "0.68rem", fontWeight: 800, fontFamily: "'Outfit',sans-serif" }}>✕ {statusLabel}</span>
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <button
+            onClick={onResubscribe}
+            style={{ background: "linear-gradient(135deg,#7c3aed,#a855f7)", color: "#fff", padding: "9px 18px", borderRadius: 10, fontWeight: 800, fontSize: "0.85rem", fontFamily: "'Outfit',sans-serif", textAlign: "center", border: "none", whiteSpace: "nowrap", cursor: "pointer" }}
+          >
+            🔁 Resubscribe
+          </button>
+          {sub.creatorUsername && (
+            <a href={`/${sub.creatorUsername}`} style={{ display: "block", color: "#6b7280", padding: "7px 16px", borderRadius: 10, fontWeight: 700, fontSize: "0.78rem", textDecoration: "none", fontFamily: "'Outfit',sans-serif", textAlign: "center", border: "1.5px solid #e5e7eb", whiteSpace: "nowrap" }}>View Profile →</a>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function FanSubscriptionRow({
   sub, onOpenChat, onManage, portalLoading,
 }: {
   sub: Subscription;
   onOpenChat: () => void;
-  onManage: () => void;
+  // onManage receives the row's sub so the parent can branch on
+  // sub.gateway (razorpay → in-app cancel, stripe → portal).
+  onManage: (sub: Subscription) => void;
   portalLoading: boolean;
 }) {
   const unread = useChatUnread(sub.id, "fan");
@@ -1022,7 +1182,7 @@ function FanSubscriptionRow({
             <a href={`/${sub.creatorUsername}`} style={{ display: "block", color: "#7c3aed", padding: "7px 16px", borderRadius: 10, fontWeight: 700, fontSize: "0.78rem", textDecoration: "none", fontFamily: "'Outfit',sans-serif", textAlign: "center", border: "1.5px solid #ede9fe", whiteSpace: "nowrap" }}>View Public Profile →</a>
           )}
           <button
-            onClick={onManage}
+            onClick={() => onManage(sub)}
             disabled={portalLoading}
             style={{ background: "none", color: "#6b7280", padding: "7px 16px", borderRadius: 10, fontWeight: 700, fontSize: "0.78rem", fontFamily: "'Outfit',sans-serif", textAlign: "center", border: "1.5px solid #e5e7eb", whiteSpace: "nowrap", cursor: portalLoading ? "wait" : "pointer" }}
             onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = "#f9fafb"; (e.currentTarget as HTMLElement).style.color = "#ef4444"; (e.currentTarget as HTMLElement).style.borderColor = "#fecaca"; }}

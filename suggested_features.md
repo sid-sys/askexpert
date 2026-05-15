@@ -69,3 +69,7 @@
 36. **Optimistic UI Updates**: Implement optimistic UI updates when users perform actions like updating profile settings or asking questions, assuming success to make the app feel faster, reverting only if the server request fails.
 37. **Route Prefetching Strategy**: Leverage Next.js <Link> component's prefetching behavior and implement strategic manual prefetching for critical flows (like the upgrade path or asking a question) to ensure near-instant page loads.
 
+
+38. **Netlify Sentry Webhook Integration**: Configure Netlify to trigger a webhook to Sentry on successful deployments to automatically register new releases and upload source maps securely.
+39. **Dependency Bundling Audit**: Periodically run `npx @next/bundle-analyzer` and evaluate the Netlify functions bundle size to optimize initialization times.
+40. **Advanced Edge Caching**: Implement Edge Functions in Netlify for global caching of public Q&A pairs, reducing the load on the Next.js serverless functions and Firebase backend.

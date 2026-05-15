@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { collection, onSnapshot, query, where, getDoc, doc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { COLLECTIONS } from "@/lib/types";
+import { formatMoney } from "@/lib/money";
 import ChatThread, { useChatPreview } from "@/components/ChatThread";
 
 type Subscriber = {
@@ -276,6 +277,16 @@ export default function FansPage() {
                     height={mobileInChat ? "100%" : "100%"}
                     flush={!mobileInChat}
                     onBack={isMobile ? () => setSelectedId(null) : undefined}
+                    // Mirror the same gate the fan side has. When the sub is
+                    // cancelled / past_due, the creator can't message either —
+                    // keeps both ends consistent so nobody is shouting into a
+                    // sealed thread.
+                    disabled={selected.status !== "active"}
+                    disabledReason={
+                      selected.status === "past_due"
+                        ? "Their last payment failed."
+                        : "Their subscription has ended."
+                    }
                   />
                 ) : selected ? (
                   <div style={{ background: "#fff", padding: 40, textAlign: "center", color: "#6b7280", height: "100%", display: "grid", placeItems: "center" }}>
@@ -328,7 +339,7 @@ function SubscriberRow({
   // status hint so the row never feels empty.
   const previewText = lastSnippet
     ? `${lastFromMe ? "You: " : ""}${lastSnippet}`
-    : `$${(sub.pricePerMonth / 100).toFixed(2)}/mo · ${sub.status === "active" ? "Active" : "Cancelled"}`;
+    : `${formatMoney(sub.pricePerMonth, sub.currency)}/mo · ${sub.status === "active" ? "Active" : "Cancelled"}`;
   return (
     <button
       onClick={onClick}

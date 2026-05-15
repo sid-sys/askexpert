@@ -8,6 +8,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { doc, updateDoc, collection, query, where, getDocs } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { COLLECTIONS, SocialLink } from "@/lib/types";
+import { formatMoney, getPayoutThresholdMinor } from "@/lib/money";
 import gsap from "gsap";
 
 // Components
@@ -20,19 +21,18 @@ import { useProfileSettings } from "./useProfileSettings";
 
 type Tab = "profile" | "pricing" | "payout" | "preview";
 
+// Response-time options. Sub-hour values (3/5/15/30 min and 1 hour) were
+// removed — they're unrealistic for an expert workflow and set fans up for
+// auto-refunds the creator can't physically hit. 3-hour minimum keeps the
+// promise both achievable and meaningful.
 const RESPONSE_TIME_OPTIONS = [
-  { label: "3 minutes",  value: 3 / 60 },
-  { label: "5 minutes",  value: 5 / 60 },
-  { label: "15 minutes", value: 15 / 60 },
-  { label: "30 minutes", value: 30 / 60 },
-  { label: "1 hour",     value: 1 },
-  { label: "3 hours",    value: 3 },
-  { label: "6 hours",    value: 6 },
-  { label: "12 hours",   value: 12 },
-  { label: "24 hours",   value: 24 },
-  { label: "48 hours",   value: 48 },
-  { label: "72 hours",   value: 72 },
-  { label: "1 week",     value: 168 },
+  { label: "3 hours",  value: 3 },
+  { label: "6 hours",  value: 6 },
+  { label: "12 hours", value: 12 },
+  { label: "24 hours", value: 24 },
+  { label: "48 hours", value: 48 },
+  { label: "72 hours", value: 72 },
+  { label: "1 week",   value: 168 },
 ];
 const PERK_TEMPLATES = [
   "⚡ Priority answers — I respond to subscribers first",
@@ -159,13 +159,14 @@ function SettingsContent() {
   const platformPlan      = (userProfile as any)?.platformPlan      ?? "free";
   const feePercent        = platformPlan === "pro" ? 0 : platformPlan === "creator" ? 10 : 20;
   const creatorKeepsPct   = 100 - feePercent;
-  // Admins always have payout unlocked (so the team can validate the flow at
-  // any earnings level). Everyone else needs to cross the $50 cleared-
-  // earnings threshold first.
+  // Creator's currency drives the payout threshold + display formatting.
+  // USD creators need $50; INR creators need ₹4,000 (see lib/money.ts).
+  const creatorCurrency   = ((userProfile as any)?.currency ?? "usd") as string;
+  const payoutThreshold   = getPayoutThresholdMinor(creatorCurrency);
   const isAdmin           = !!(userProfile as any)?.isAdmin;
-  const payoutUnlocked    = isAdmin || totalEarnings >= 5000;
-  const earningsFormatted = `$${(totalEarnings / 100).toFixed(2)}`;
-  const progressPct       = Math.min(100, (totalEarnings / 5000) * 100);
+  const payoutUnlocked    = isAdmin || totalEarnings >= payoutThreshold;
+  const earningsFormatted = formatMoney(totalEarnings, creatorCurrency);
+  const progressPct       = Math.min(100, (totalEarnings / payoutThreshold) * 100);
 
   // ── Lifetime cap + auto-upgrade enforcement state ────────────────────────
   // We ask the server for the lifetime gross + plan cap on payout tab mount.

@@ -30,6 +30,7 @@ function subscriberDisplayLabel(s: SubscriberRow, nameLookup: Record<string, str
   return "Anonymous Fan";
 }
 import { getPlatformFeePercent } from "@/lib/stripe";
+import { formatMoney, getCurrencySymbol } from "@/lib/money";
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, BarChart, Bar,
@@ -248,6 +249,11 @@ export default function AnalyticsPage() {
   // a date range so we re-derive against today's tier.
   const platformFeePct = getPlatformFeePercent((userProfile as any)?.platformPlan ?? "free");
   const creatorNetRate = (100 - platformFeePct) / 100;
+  // Display every money value in the creator's chosen currency. Amounts in
+  // Firestore are minor units (cents/paise) — same x100 convention regardless
+  // of currency, so formatMoney just swaps the symbol.
+  const creatorCurrency: string = (userProfile as any)?.currency ?? "usd";
+  const sym = getCurrencySymbol(creatorCurrency);
 
   const totalEarned    = filteredQuestions.filter(q => q.status === "ANSWERED").reduce((s, q) => s + q.pricePaid * creatorNetRate, 0);
   const totalQuestions = filteredQuestions.length;
@@ -332,7 +338,7 @@ export default function AnalyticsPage() {
     });
 
   const kpis = [
-    { label: "Total Earned",     value: `$${(totalEarned / 100).toFixed(2)}`, color: "#7c3aed", icon: "💰" },
+    { label: "Total Earned",     value: formatMoney(totalEarned, creatorCurrency), color: "#7c3aed", icon: "💰" },
     { label: "Response Rate",    value: `${responseRate}%`,                    color: "#10b981", icon: "📈" },
     { label: "Avg Response Time",value: avgResponse,                           color: "#f59e0b", icon: "⚡" },
     { label: "Total Questions",  value: totalQuestions,                        color: "#1f2937", icon: "📨" },
@@ -373,7 +379,7 @@ export default function AnalyticsPage() {
               new Date(q.createdAt).toLocaleDateString(),
               askerDisplayLabel(q, nameLookup),
               q.status,
-              `$${(q.pricePaid / 100).toFixed(2)}`,
+              formatMoney(q.pricePaid, creatorCurrency),
               `"${(q.content || "").replace(/"/g, '""')}"`
             ]);
             const csv = [header, ...rows].map(e => e.join(",")).join("\n");
@@ -455,11 +461,11 @@ export default function AnalyticsPage() {
             </defs>
             <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
             <XAxis dataKey="date" tick={{ fill: "#9ca3af", fontSize: 12, fontFamily: "Inter" }} axisLine={false} tickLine={false} />
-            <YAxis tick={{ fill: "#9ca3af", fontSize: 12, fontFamily: "Inter" }} axisLine={false} tickLine={false} tickFormatter={(v) => `$${(v / 100).toFixed(0)}`} />
+            <YAxis tick={{ fill: "#9ca3af", fontSize: 12, fontFamily: "Inter" }} axisLine={false} tickLine={false} tickFormatter={(v) => `${sym}${(v / 100).toFixed(0)}`} />
             <Tooltip
               contentStyle={TOOLTIP_STYLE}
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              formatter={(v: any) => [`$${((Number(v) || 0) / 100).toFixed(2)}`, "Earned"]}
+              formatter={(v: any) => [formatMoney(Number(v) || 0, creatorCurrency), "Earned"]}
             />
             <Area type="monotone" dataKey="earned" stroke="#7c3aed" strokeWidth={2.5} fill="url(#earnGrad)" dot={false} />
           </AreaChart>
@@ -505,7 +511,7 @@ export default function AnalyticsPage() {
         <div className="analytics-sub-kpis" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 12, marginBottom: 20 }}>
           {[
             { label: "Active Subscribers", value: activeSubscribers.length, color: "#7c3aed", icon: "👥" },
-            { label: "MRR (You Receive)",  value: `$${(mrrNet / 100).toFixed(2)}`, color: "#10b981", icon: "💰" },
+            { label: "MRR (You Receive)",  value: formatMoney(mrrNet, creatorCurrency), color: "#10b981", icon: "💰" },
             { label: `New (${DATE_RANGES.find(d => d.val === dateRange)?.label.toLowerCase()})`,
                                             value: newSubsInRange,           color: "#1f2937", icon: "➕" },
             { label: "Cancelled (period)", value: cancelledInRange,          color: "#9ca3af", icon: "↩️" },
@@ -546,11 +552,11 @@ export default function AnalyticsPage() {
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontFamily: "'Inter', sans-serif", fontSize: "0.88rem", fontWeight: 600, color: "#374151", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.label}</div>
                     <div style={{ fontFamily: "'Inter', sans-serif", fontSize: "0.75rem", color: "#9ca3af", marginTop: 2 }}>
-                      Subscribed {s.days === 0 ? "today" : `${s.days} day${s.days === 1 ? "" : "s"} ago`} · ${(s.pricePerMonth / 100).toFixed(2)}/mo
+                      Subscribed {s.days === 0 ? "today" : `${s.days} day${s.days === 1 ? "" : "s"} ago`} · {formatMoney(s.pricePerMonth, creatorCurrency)}/mo
                     </div>
                   </div>
                   <div style={{ fontFamily: "'Outfit', sans-serif", fontSize: "1rem", fontWeight: 800, color: "#7c3aed", marginLeft: 12, whiteSpace: "nowrap" }}>
-                    ~${(s.approxSpent / 100).toFixed(2)}
+                    ~{formatMoney(s.approxSpent, creatorCurrency)}
                   </div>
                 </div>
               ))}
@@ -612,7 +618,7 @@ export default function AnalyticsPage() {
                   <div style={{ fontFamily: "'Inter', sans-serif", fontSize: "0.75rem", color: "#9ca3af", marginTop: 2 }}>{a.count} questions asked</div>
                 </div>
                 <div style={{ fontFamily: "'Outfit', sans-serif", fontSize: "1rem", fontWeight: 800, color: "#7c3aed", marginLeft: 12, whiteSpace: "nowrap" }}>
-                  ${(a.totalSpent / 100).toFixed(2)}
+                  {formatMoney(a.totalSpent, creatorCurrency)}
                 </div>
               </div>
             ))}
@@ -637,10 +643,10 @@ export default function AnalyticsPage() {
         <div>
           <div style={{ fontFamily: "'Inter', sans-serif", fontSize: "0.85rem", opacity: 0.8, marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.06em" }}>Total Lifetime Earnings</div>
           <div style={{ fontFamily: "'Outfit', sans-serif", fontSize: "2.8rem", fontWeight: 800, lineHeight: 1 }}>
-            ${(lifetimeTotalNet / 100).toFixed(2)}
+            {formatMoney(lifetimeTotalNet, creatorCurrency)}
           </div>
           <div style={{ fontFamily: "'Inter', sans-serif", fontSize: "0.88rem", opacity: 0.75, marginTop: 6 }}>
-            ${(lifetimeOneTimeNet / 100).toFixed(2)} from questions · ${(lifetimeSubscriptionNet / 100).toFixed(2)} from subscriptions
+            {formatMoney(lifetimeOneTimeNet, creatorCurrency)} from questions · {formatMoney(lifetimeSubscriptionNet, creatorCurrency)} from subscriptions
           </div>
         </div>
         <a href="/profile" style={{

@@ -161,7 +161,11 @@ export interface FirestoreSubscription {
   creatorId: string;
   followerId: string;
   followerEmail: string;
-  stripeSubscriptionId: string;
+  // Exactly one of these is set depending on the gateway. Looking up a sub
+  // by its provider id always queries the matching field.
+  stripeSubscriptionId?: string;
+  razorpaySubscriptionId?: string;
+  gateway?: "stripe" | "razorpay";
   status: "active" | "canceled" | "past_due";
   createdAt: Date;
 }
@@ -172,16 +176,25 @@ export interface FirestorePayout {
   creatorId: string;
   creatorName: string;
   creatorEmail?: string;
-  amount: number;             // creator's cut in cents (after platform fee)
-  platformFeeAmount: number;  // platform fee in cents
-  totalPaid: number;          // gross amount paid by asker in cents
+  // Amounts are in the currency's minor unit: cents for usd/eur/gbp,
+  // paise for inr. Same x100 convention either way.
+  amount: number;             // creator's cut after platform fee
+  platformFeeAmount: number;  // platform fee
+  totalPaid: number;          // gross amount paid
   currency: string;
   questionId?: string;
   subscriptionId?: string;
-  paymentType: "per_question" | "monthly_subscription";
+  paymentType: "per_question" | "monthly_subscription" | "subscription";
   status: PayoutStatus;
   bankDetails?: BankDetails;
-  stripeSessionId: string;
+  // Provider-specific transaction refs — set whichever gateway processed
+  // the payment. Stripe path sets stripeSessionId; Razorpay path sets
+  // razorpayOrderId/razorpayPaymentId/razorpaySubscriptionId.
+  stripeSessionId?: string;
+  razorpayOrderId?: string;
+  razorpayPaymentId?: string;
+  razorpaySubscriptionId?: string;
+  gateway?: "stripe" | "razorpay";
   createdAt: Date;
   paidAt?: Date;
   notes?: string;             // admin notes e.g. "Paid via Wise 2024-01-15"

@@ -122,6 +122,11 @@ interface ChatThreadProps {
   // Edge-to-edge mode (no outer border / rounded corners). Used in the
   // desktop chat layouts where the thread butts against the chat list.
   flush?: boolean;
+  // When true, hide the input bar and show a disabled-reason banner instead.
+  // Used to seal threads when the underlying subscription is cancelled /
+  // past_due — both fan and creator stop being able to send.
+  disabled?: boolean;
+  disabledReason?: string;
 }
 
 function timeAgo(d: Date): string {
@@ -197,6 +202,8 @@ export default function ChatThread({
   showHeader = true,
   onBack,
   flush = false,
+  disabled = false,
+  disabledReason,
 }: ChatThreadProps) {
   const { user } = useAuth();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -287,6 +294,10 @@ export default function ChatThread({
   // ── Send everything currently staged (text + pending files + pending voice)
   async function performSend() {
     if (!user) return;
+    // Hard-gate when the thread is disabled (cancelled / past_due sub). The
+    // input is hidden in this case anyway, but belt-and-braces in case some
+    // keyboard shortcut bypassed the UI.
+    if (disabled) return;
     const text = draft.trim();
     const hasFiles = pendingFiles.length > 0;
     const hasVoice = pendingVoice !== null;
@@ -610,6 +621,29 @@ export default function ChatThread({
             </div>
           )}
 
+          {disabled ? (
+            // Sealed thread (cancelled / past_due sub). Both fan AND creator
+            // see this — neither side can resume the conversation until the
+            // fan resubscribes via /fan-dashboard?view=subscriptions.
+            <div style={{
+              borderTop: "1px solid #f0f0f0",
+              padding: "16px 20px",
+              background: "#fafafa",
+              flexShrink: 0,
+              textAlign: "center",
+              paddingBottom: `calc(16px + env(safe-area-inset-bottom))`,
+            }}>
+              <div style={{ fontSize: "1.4rem", marginBottom: 6 }}>🔒</div>
+              <p style={{ fontFamily: "'Outfit',sans-serif", fontWeight: 700, color: "#374151", fontSize: "0.9rem", margin: "0 0 4px" }}>
+                {disabledReason || "This conversation is paused."}
+              </p>
+              <p style={{ fontFamily: "'Outfit',sans-serif", color: "#9ca3af", fontSize: "0.78rem", margin: 0 }}>
+                {viewerRole === "fan"
+                  ? "Resubscribe to continue chatting with this creator."
+                  : "Messaging is paused until the fan resubscribes."}
+              </p>
+            </div>
+          ) : (
           <div className="chat-input-row" style={{
             borderTop: (pendingFiles.length > 0 || replyingTo) ? "none" : "1px solid #f0f0f0",
             padding: 8, display: "flex", gap: 6, alignItems: "center",
@@ -687,6 +721,7 @@ export default function ChatThread({
               );
             })()}
           </div>
+          )}
         </>
       )}
       <style jsx>{`

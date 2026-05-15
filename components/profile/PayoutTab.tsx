@@ -1,6 +1,7 @@
 "use client";
 
 import Swal from "sweetalert2";
+import { formatMoney, getPayoutThresholdMinor } from "@/lib/money";
 
 interface PayoutTabProps {
   platformPlan: string;
@@ -45,10 +46,6 @@ interface PayoutTabProps {
   setWiseEmail: (v: string) => void;
 }
 
-function formatCents(c: number): string {
-  return `$${(c / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-}
-
 const labelStyle: React.CSSProperties = {
   display: "block",
   color: "var(--text-dark)",
@@ -88,6 +85,12 @@ export default function PayoutTab({
   swiftCode, setSwiftCode, paypalEmail, setPaypalEmail, wiseEmail, setWiseEmail
 }: PayoutTabProps) {
   const planLabel = platformPlan === "pro" ? "Pro" : platformPlan === "creator" ? "Creator" : "Free";
+  // Display all money values in the creator's chosen currency. `totalEarnings`
+  // and `*Cents` props are minor units of that currency (cents for USD/EUR/…,
+  // paise for INR — same x100 convention).
+  const creatorCurrency: string = (userProfile?.currency ?? "usd") as string;
+  const fmt = (c: number) => formatMoney(c, creatorCurrency);
+  const payoutThreshold = getPayoutThresholdMinor(creatorCurrency);
   const lifetimePct = lifetimeEarningsCents != null && lifetimeCapCents != null && isFinite(lifetimeCapCents)
     ? Math.min(100, (lifetimeEarningsCents / lifetimeCapCents) * 100)
     : 0;
@@ -113,7 +116,7 @@ export default function PayoutTab({
             <div style={{ color: "#7f1d1d", fontSize: "0.88rem", lineHeight: 1.55 }}>
               You exceeded your <strong>{planLabel}</strong> plan's lifetime earning cap, so we
               tried to bump you to the next tier from your accrued earnings.
-              You're short by <strong>{formatCents(paymentDueCents)}</strong>. Until this is
+              You're short by <strong>{fmt(paymentDueCents)}</strong>. Until this is
               settled, you can't reply to new questions, but fans can still ask.
             </div>
             <button onClick={handleManagePlan} disabled={portalLoading}
@@ -160,15 +163,15 @@ export default function PayoutTab({
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 14 }}>
           <div style={{ background: "#fff", border: "2px solid var(--border)", borderRadius: 14, padding: 16 }}>
             <div style={{ fontSize: "0.72rem", color: "var(--text-muted)", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em" }}>Lifetime Gross</div>
-            <div style={{ fontFamily: "var(--font-main)", fontWeight: 900, fontSize: "1.6rem", color: "var(--text-dark)", marginTop: 4 }}>{formatCents(totalEarnings)}</div>
+            <div style={{ fontFamily: "var(--font-main)", fontWeight: 900, fontSize: "1.6rem", color: "var(--text-dark)", marginTop: 4 }}>{fmt(totalEarnings)}</div>
           </div>
           <div style={{ background: "#fff", border: "2px solid var(--border)", borderRadius: 14, padding: 16 }}>
             <div style={{ fontSize: "0.72rem", color: "var(--text-muted)", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em" }}>Your Net</div>
-            <div style={{ fontFamily: "var(--font-main)", fontWeight: 900, fontSize: "1.6rem", color: "#10b981", marginTop: 4 }}>{formatCents(creatorNetCents)}</div>
+            <div style={{ fontFamily: "var(--font-main)", fontWeight: 900, fontSize: "1.6rem", color: "#10b981", marginTop: 4 }}>{fmt(creatorNetCents)}</div>
           </div>
           <div style={{ background: "#fff", border: "2px solid var(--border)", borderRadius: 14, padding: 16 }}>
             <div style={{ fontSize: "0.72rem", color: "var(--text-muted)", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em" }}>Platform Fee</div>
-            <div style={{ fontFamily: "var(--font-main)", fontWeight: 900, fontSize: "1.6rem", color: "#f59e0b", marginTop: 4 }}>{formatCents(platformCutCents)}</div>
+            <div style={{ fontFamily: "var(--font-main)", fontWeight: 900, fontSize: "1.6rem", color: "#f59e0b", marginTop: 4 }}>{fmt(platformCutCents)}</div>
           </div>
         </div>
       </div>
@@ -186,10 +189,10 @@ export default function PayoutTab({
           </p>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
             <span style={{ fontFamily: "var(--font-main)", fontWeight: 900, fontSize: "1.4rem", color: exceededCap ? "#b91c1c" : "var(--text-dark)" }}>
-              {formatCents(lifetimeEarningsCents)}
+              {fmt(lifetimeEarningsCents)}
             </span>
             <span style={{ color: "var(--text-muted)", fontSize: "0.85rem", fontWeight: 600 }}>
-              of {isFinite(lifetimeCapCents) ? formatCents(lifetimeCapCents) : "∞"} cap
+              of {isFinite(lifetimeCapCents) ? fmt(lifetimeCapCents) : "∞"} cap
             </span>
           </div>
           {isFinite(lifetimeCapCents) && (
@@ -231,7 +234,7 @@ export default function PayoutTab({
             </div>
             <div style={{ textAlign: "right" }}>
               <span style={{ fontSize: "0.85rem", color: "var(--text-muted)", fontWeight: 700, textTransform: "uppercase", display: "block", marginBottom: 4 }}>Payout Threshold</span>
-              <span style={{ fontFamily: "var(--font-main)", fontWeight: 800, fontSize: "1.2rem", color: "var(--text-dark)", lineHeight: 1 }}>$50.00</span>
+              <span style={{ fontFamily: "var(--font-main)", fontWeight: 800, fontSize: "1.2rem", color: "var(--text-dark)", lineHeight: 1 }}>{fmt(payoutThreshold)}</span>
             </div>
           </div>
           <div style={{ height: 16, background: "#f3f4f6", borderRadius: 99, overflow: "hidden", border: "1px solid inset rgba(0,0,0,0.1)" }}>
@@ -250,7 +253,7 @@ export default function PayoutTab({
       </div>
 
       {/* PAYOUT METHOD LOCK BANNER — shown only while the creator is below
-          the $50 payout threshold. Sits above the chooser so the reason is
+          the payout threshold. Sits above the chooser so the reason is
           obvious before the disabled state is encountered. */}
       {!payoutUnlocked && (
         <div style={{
@@ -264,9 +267,9 @@ export default function PayoutTab({
               Payout method locked
             </div>
             <div style={{ color: "#78350f", fontSize: "0.88rem", lineHeight: 1.55 }}>
-              Reach <strong>$50.00</strong> in cleared earnings to unlock payout setup.
+              Reach <strong>{fmt(payoutThreshold)}</strong> in cleared earnings to unlock payout setup.
               You&apos;ve cleared <strong>{earningsFormatted}</strong> so far —
-              <strong> {formatCents(Math.max(0, 5000 - totalEarnings))}</strong> to go.
+              <strong> {fmt(Math.max(0, payoutThreshold - totalEarnings))}</strong> to go.
               Your earnings keep accruing in the meantime and will pay out the moment you cross the threshold.
             </div>
           </div>
@@ -276,7 +279,7 @@ export default function PayoutTab({
       {/* PAYOUT METHOD CHOOSER */}
       <div
         className={`card-brutal ${payoutUnlocked ? "card-brutal-green" : ""}`}
-        // When the creator hasn't crossed the $50 payout threshold we lock
+        // When the creator hasn't crossed the payout threshold we lock
         // this whole section. Locking is visual + behavioural: pointer-events
         // off prevents clicks anywhere inside the card (chooser buttons,
         // method-specific config, the Stripe setup CTA), opacity dims it, and
@@ -315,9 +318,9 @@ export default function PayoutTab({
           <div style={{ marginBottom: 30, padding: 24, border: "2px solid var(--border)", borderRadius: 16, background: "#fafafa" }}>
             <label style={labelStyle}>Select Transfer Service</label>
             <div style={{ position: "relative" }}>
-              <select 
-                className="input-brutal" 
-                value={payoutMethod === "manual_bank" ? "paypal" : payoutMethod} 
+              <select
+                className="input-brutal"
+                value={payoutMethod === "manual_bank" ? "paypal" : payoutMethod}
                 onChange={(e) => setPayoutMethod(e.target.value as any)}
                 style={{ width: "100%", cursor: "pointer", background: "#fff", height: 56, fontSize: "1.05rem", fontWeight: 600, appearance: "none" }}
               >
@@ -464,4 +467,3 @@ export default function PayoutTab({
     </div>
   );
 }
-

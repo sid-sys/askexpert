@@ -6,6 +6,7 @@ import { useProfileSettings } from "@/app/profile/useProfileSettings";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState, Suspense } from "react";
 import Swal from "sweetalert2";
+import { formatMoney, getPlanPriceMinor, getPlanLifetimeCapMinor } from "@/lib/money";
 
 const PLAN_LABEL: Record<string, string> = {
   free: "Free",
@@ -14,7 +15,7 @@ const PLAN_LABEL: Record<string, string> = {
 };
 
 function UpgradeContent() {
-  const { user, userProfile, loading, logout } = useAuth();
+  const { user, userProfile, loading, logout, refreshProfile } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -59,13 +60,23 @@ function UpgradeContent() {
 
         if (stale) return;
 
+        // Force-pull the latest user doc so the plan cards flip immediately.
+        // The AuthContext onSnapshot will catch up too, but kicking refresh
+        // here trims the perceived delay from ~5s to <1s — the user sees the
+        // "Current Plan" badge move to the new tier before / while the Swal
+        // is dismissed instead of waiting for it to close.
+        try { await refreshProfile(); } catch { /* ignore — snapshot reconciles */ }
+
         if (activated) {
-          await Swal.fire({
+          // Don't `await` so the Swal doesn't block the page update behind
+          // it. Timer dropped to 2s — long enough to register, short enough
+          // not to feel sluggish.
+          Swal.fire({
             icon: "success",
             title: `You're on ${PLAN_LABEL[activated] ?? "your new plan"}! 🎉`,
             text: "Your platform fee is updated. Welcome to the new tier.",
             confirmButtonColor: "#7c3aed",
-            timer: 4000,
+            timer: 2000,
             timerProgressBar: true,
           });
         } else if (cancelled === "true") {
@@ -90,6 +101,16 @@ function UpgradeContent() {
   if (loading || !user) return <div style={{ padding: 40, color: "white" }}>Loading...</div>;
 
   const platformPlan = (userProfile as any)?.platformPlan ?? "free";
+  // Creator's chosen currency drives all money rendering on this page —
+  // plan prices, lifetime caps, the "pay with earnings" balance Swal.
+  // Indian creators (currency=inr) see ₹ prices and INR caps; everyone
+  // else sees USD as before.
+  const creatorCurrency: string = (userProfile as any)?.currency ?? "usd";
+  const fmtPlanPrice = (plan: string) => formatMoney(getPlanPriceMinor(plan, creatorCurrency), creatorCurrency);
+  const fmtLifetimeCap = (plan: string) => {
+    const cap = getPlanLifetimeCapMinor(plan, creatorCurrency);
+    return Number.isFinite(cap) ? formatMoney(cap, creatorCurrency, { compact: true }) : null;
+  };
   // Mirror the "scheduled cancellation" state from Stripe so the
   // current-plan card can say "Cancels on <date>" instead of just
   // "Manage Billing →". The fields are populated by both /api/stripe/
@@ -110,6 +131,70 @@ function UpgradeContent() {
 
   const handleManagePlan = async () => {
     if (!user) return;
+
+    // Route based on which gateway actually holds the active subscription,
+    // NOT the creator's current currency. A creator can switch currency
+    // after upgrading (or upgrade via Stripe before INR pricing existed),
+    // and we must still manage the original sub through its original gateway.
+    const hasRazorpaySub = !!(userProfile as any)?.platformPlanRazorpaySubId;
+
+    if (hasRazorpaySub) {
+      // Razorpay sub → in-app cancel dialog (no hosted portal equivalent).
+      const choice = await Swal.fire({
+        icon: "warning",
+        title: "Cancel your subscription?",
+        html: `
+          <div style="text-align:left; font-size:0.92rem; line-height:1.55;">
+            You're on the <strong>${PLAN_LABEL[platformPlan] ?? platformPlan}</strong> plan.<br/><br/>
+            <strong>Cancel at end of cycle</strong> — keep access until
+            ${cancelDateLabel || "the end of this billing period"}.<br/>
+            <strong>Cancel now</strong> — switch to Free immediately, no refund for unused days.
+          </div>
+        `,
+        showDenyButton: true,
+        showCancelButton: true,
+        confirmButtonText: "Cancel at cycle end",
+        denyButtonText: "Cancel now",
+        cancelButtonText: "Keep my plan",
+        confirmButtonColor: "#7c3aed",
+        denyButtonColor: "#ef4444",
+        cancelButtonColor: "#6b7280",
+        reverseButtons: true,
+      });
+      if (choice.isDismissed) return;
+      const cancelAtCycleEnd = !choice.isDenied;
+
+      setPortalLoading(true);
+      try {
+        const { getIdToken } = await import("firebase/auth");
+        const token = await getIdToken(user as any);
+        const res = await fetch("/api/razorpay/cancel-subscription", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ cancelAtCycleEnd }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Cancel failed");
+
+        await Swal.fire({
+          icon: "success",
+          title: cancelAtCycleEnd ? "Cancellation scheduled" : "Subscription cancelled",
+          text: cancelAtCycleEnd
+            ? `Your plan ends on ${cancelDateLabel || "your next billing date"}. You keep all features until then.`
+            : "You're back on the Free plan. Thanks for trying it out!",
+          confirmButtonColor: "#7c3aed",
+        });
+        // Soft refresh so the /upgrade card updates without a full reload.
+        router.refresh();
+      } catch (err: any) {
+        reportBug({ error: err, context: "app/upgrade/page.tsx (razorpay cancel)" });
+      } finally {
+        setPortalLoading(false);
+      }
+      return;
+    }
+
+    // USD / other-currency creators → Stripe billing portal (unchanged).
     setPortalLoading(true);
     try {
       const { getIdToken } = await import("firebase/auth");
@@ -138,7 +223,14 @@ function UpgradeContent() {
     if (!user) return;
     setBusyPlan(plan);
     try {
-      const res = await fetch("/api/stripe/create-subscription-checkout", {
+      // Gateway routing: Indian creators (currency === "inr") → Razorpay,
+      // everyone else → Stripe. The creator's currency is the merchant-side
+      // signal that determines which gateway can process the charge.
+      const useRazorpay = ((userProfile as any)?.currency || "usd").toLowerCase() === "inr";
+      const endpoint = useRazorpay
+        ? "/api/razorpay/create-subscription-checkout"
+        : "/api/stripe/create-subscription-checkout";
+      const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -149,6 +241,19 @@ function UpgradeContent() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Could not start checkout");
+      if (useRazorpay && data.subscriptionId) {
+        const { openRazorpaySubscription } = await import("@/lib/razorpay-client");
+        await openRazorpaySubscription({
+          subscriptionId: data.subscriptionId,
+          keyId:          data.keyId,
+          name:           "AskExpert",
+          description:    `${plan === "pro" ? "Pro" : "Creator"} Plan — Monthly`,
+          prefill:        data.prefill,
+          successRedirect: `/upgrade?plan_activated=${plan}`,
+        });
+        setBusyPlan(null);
+        return;
+      }
       if (data.url) {
         // Full-page redirect — Stripe Checkout owns the next screen.
         window.location.href = data.url;
@@ -172,16 +277,19 @@ function UpgradeContent() {
     if (!user) return;
 
     const target = plan === "pro"
-      ? { name: "Pro",     price: "$9.99", fee: "0%" }
-      : { name: "Creator", price: "$4.99", fee: "10%" };
+      ? { name: "Pro",     price: fmtPlanPrice("pro"),     fee: "0%"  }
+      : { name: "Creator", price: fmtPlanPrice("creator"), fee: "10%" };
     const currentLabel = PLAN_LABEL[platformPlan] ?? "your current plan";
     const isUp = (platformPlan === "free")
       || (platformPlan === "creator" && plan === "pro");
 
+    // Amount stored in user.totalEarnings is in minor units of whatever
+    // currency the creator was charging in. Compare apples to apples by
+    // using the plan price in the same currency.
     const earningsCents = ((userProfile as any)?.totalEarnings ?? 0) as number;
-    const feeCents = plan === "pro" ? 999 : 499;
+    const feeCents = getPlanPriceMinor(plan, creatorCurrency);
     const canUseEarnings = earningsCents >= feeCents;
-    const earningsLabel = `$${(earningsCents / 100).toFixed(2)}`;
+    const earningsLabel = formatMoney(earningsCents, creatorCurrency);
 
     // SweetAlert2 returns "isConfirmed" for the primary action and
     // "isDenied" for the secondary action (which we use as
@@ -238,7 +346,7 @@ function UpgradeContent() {
         await Swal.fire({
           icon: "warning",
           title: "Not enough earnings",
-          html: `You need ${target.price} but only have $${((data.availableCents ?? 0) / 100).toFixed(2)} in accrued earnings. Try paying with card.`,
+          html: `You need ${target.price} but only have ${formatMoney(data.availableCents ?? 0, creatorCurrency)} in accrued earnings. Try paying with card.`,
           confirmButtonColor: "#7c3aed",
         });
         return;
@@ -259,7 +367,7 @@ function UpgradeContent() {
         html: `
           <div style="font-size:0.92rem; line-height:1.5;">
             <strong>${target.price}</strong> was deducted from your earnings.
-            Remaining balance: <strong>$${((data.remainingEarningsCents ?? 0) / 100).toFixed(2)}</strong>.
+            Remaining balance: <strong>${formatMoney(data.remainingEarningsCents ?? 0, creatorCurrency)}</strong>.
           </div>
         `,
         confirmButtonColor: "#7c3aed",
@@ -334,20 +442,27 @@ function UpgradeContent() {
         <div className="upgrade-plans-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 16, alignItems: "stretch" }}>
           {([
             {
-              plan: "free" as const, label: "Free", price: "$0", period: "forever",
+              plan: "free" as const, label: "Free", price: fmtPlanPrice("free"), period: "forever",
               fee: "20%", feeLabel: "per transaction", accent: "var(--text-muted)", accentBg: "#f3f4f6",
-              perks: ["Public creator profile", "Unlimited questions", "Pay-per-question & monthly sub", "Up to $1,000 lifetime earnings"],
+              perks: [
+                "Public creator profile",
+                "Unlimited questions",
+                "Pay-per-question & monthly sub",
+                `Up to ${fmtLifetimeCap("free")} lifetime earnings`,
+              ],
             },
             {
-              // Explicit rgba on the badge background so it's reliably light
-              // violet (the `--purple-light` token was rendering nearly solid
-              // and swallowing the purple text on top of it).
-              plan: "creator" as const, label: "Creator", price: "$4.99", period: "per month",
+              plan: "creator" as const, label: "Creator", price: fmtPlanPrice("creator"), period: "per month",
               fee: "10%", feeLabel: "per transaction", accent: "#7c3aed", accentBg: "rgba(124,58,237,0.12)",
-              perks: ["Everything in Free", "Custom profile branding", "Priority support", "Up to $10,000 lifetime earnings"],
+              perks: [
+                "Everything in Free",
+                "Custom profile branding",
+                "Priority support",
+                `Up to ${fmtLifetimeCap("creator")} lifetime earnings`,
+              ],
             },
             {
-              plan: "pro" as const, label: "Pro", price: "$9.99", period: "per month",
+              plan: "pro" as const, label: "Pro", price: fmtPlanPrice("pro"), period: "per month",
               fee: "0%", feeLabel: "platform fee", accent: "var(--green)", accentBg: "rgba(16,185,129,0.1)",
               perks: ["Everything in Creator", "Zero platform fee", "Unlimited earnings", "Dedicated account manager"],
             },
