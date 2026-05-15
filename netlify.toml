@@ -7,3 +7,16 @@
 
 [functions]
   included_files = ["! .gemini/**", "! .claude/**"]
+
+# ── Cross-Origin headers ─────────────────────────────────────────────────────
+# `same-origin-allow-popups` lets Firebase's Google sign-in popup call
+# window.close() on itself when the user finishes authenticating. The
+# stricter `same-origin` (Netlify's default in some setups) silently blocks
+# the close, which floods the console and breaks the popup-based sign-in
+# UX on Safari + Firefox in particular. Cross-origin isolation features
+# (SharedArrayBuffer etc.) aren't used by this app, so opening the policy
+# slightly here is a net win.
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Cross-Origin-Opener-Policy = "same-origin-allow-popups"
