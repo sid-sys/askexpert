@@ -9,7 +9,8 @@ import {
 } from "react";
 import {
   User,
-  signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
   GoogleAuthProvider,
   signOut,
   onAuthStateChanged,
@@ -111,6 +112,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // later — we can stamp the original source onto their user doc.
   useEffect(() => { captureAttribution(); }, []);
 
+  // Pick up the Google sign-in result once we land back on the app.
+  // signInWithRedirect navigates the entire window away, so `onAuthStateChanged`
+  // will fire with the new user when we come back, but we still need to
+  // call getRedirectResult once to flush any pending redirect and to
+  // bootstrap the Firestore user doc for first-time sign-ups.
+  useEffect(() => {
+    let cancelled = false;
+    getRedirectResult(auth)
+      .then(async (result) => {
+        if (cancelled || !result?.user) return;
+        try { await ensureUserDoc(result.user); }
+        catch (e) { console.error("[AuthContext] ensureUserDoc after redirect:", e); }
+      })
+      .catch((err) => {
+        // Most common case here is no-redirect-pending (returns null, no error).
+        // Real errors are worth surfacing.
+        if (err?.code) console.error("[AuthContext] getRedirectResult:", err.code, err.message);
+      });
+    return () => { cancelled = true; };
+  }, []);
+
   useEffect(() => {
     let profileUnsub: (() => void) | null = null;
 
@@ -164,10 +186,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return "usd";
   };
 
-  const signInWithGoogle = async () => {
-    const provider = new GoogleAuthProvider();
-    const result = await signInWithPopup(auth, provider);
-    const { user: u } = result;
+  // Shared user-doc bootstrap. Called both by getRedirectResult (the new
+  // post-Google-redirect path) and any other future sign-in flow that
+  // needs to ensure the Firestore profile exists before the rest of the
+  // app reads it. Idempotent — bails fast if the doc already exists.
+  const ensureUserDoc = async (u: User) => {
     const isAdminEmail = u.email?.toLowerCase() === "sidharthbabu9@gmail.com";
     const ref = doc(db, COLLECTIONS.USERS, u.uid);
     const snap = await getDoc(ref);
@@ -194,7 +217,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } as FirestoreUser;
       await setDoc(ref, profile);
       setUserProfile(profile);
-      // Grant Firebase custom claim for admin
       if (isAdminEmail) {
         await fetch("/api/admin/set-claim", {
           method: "POST",
@@ -204,7 +226,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     } else {
       const existing = snap.data() as FirestoreUser;
-      // Retroactively grant admin if they weren't flagged yet
       if (isAdminEmail && !existing.isAdmin) {
         await setDoc(ref, { isAdmin: true, isCreator: true }, { merge: true });
         existing.isAdmin = true;
@@ -217,6 +238,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       setUserProfile(existing);
     }
+  };
+
+  // Switched from signInWithPopup → signInWithRedirect. The popup-based
+  // flow flooded the console with Cross-Origin-Opener-Policy warnings
+  // because the popup lives on Firebase's hosting domain (firebaseapp.com)
+  // and its own COOP blocks the post-auth window.close(). Redirect avoids
+  // the popup entirely — full-page navigation to Google, then back to us.
+  // The result is collected on mount in the getRedirectResult effect below.
+  const signInWithGoogle = async () => {
+    const provider = new GoogleAuthProvider();
+    await signInWithRedirect(auth, provider);
   };
 
   const signInWithEmail = async (email: string, password: string) => {
