@@ -11,7 +11,7 @@ import {
   MessageComposer,
   Thread,
 } from "stream-chat-react";
-import "stream-chat-react/dist/css/v2/index.css";
+import "stream-chat-react/dist/css/index.css";
 import { useAuth } from "@/context/AuthContext";
 
 // CommunityChat — embedded Stream channel for a creator's community.
