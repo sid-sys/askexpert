@@ -121,10 +121,6 @@ export default function CreatorProfilePage({ params }: { params: Promise<{ usern
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [email,       setEmail]       = useState("");
   const [name,        setName]        = useState("");
-  // Optional fan phone — only rendered for INR creators since it's
-  // forwarded to Razorpay's prefill.contact to skip the modal's phone
-  // prompt. Empty string is fine (modal will ask the fan instead).
-  const [phone,       setPhone]       = useState("");
   const [submitting,  setSubmitting]  = useState(false);
   const [submitted,   setSubmitted]   = useState(false);
 
@@ -254,10 +250,9 @@ export default function CreatorProfilePage({ params }: { params: Promise<{ usern
           };
           setCreator(data);
           setNotFoundFlag(false);
-          if (!qaFetched) {
-            qaFetched = true;
-            fetchPublicQA(data.uid);
-          }
+          // Public Q&A on the profile is intentionally hidden — fetch is
+          // skipped to avoid the Firestore read.
+          void qaFetched; void fetchPublicQA;
         },
         (err) => {
           console.error("Firestore onSnapshot error:", err);
@@ -597,9 +592,6 @@ export default function CreatorProfilePage({ params }: { params: Promise<{ usern
           content,
           followerEmail:   email.trim(),
           followerName:    name.trim(),
-          // Forward phone only when present — Razorpay uses it for
-          // prefill.contact; Stripe ignores it.
-          followerPhone:   phone.trim() || undefined,
           mode:            payMode,
           price,
           stripeAccountId: display.stripeAccountId ?? null,
@@ -727,18 +719,8 @@ export default function CreatorProfilePage({ params }: { params: Promise<{ usern
           >
             Ask
           </button>
-          {publicQA.length > 0 && (
-            <button
-              onClick={() => document.getElementById("public-qa")?.scrollIntoView({ behavior: "smooth" })}
-              style={{
-                background: "none", border: "none", cursor: "pointer",
-                fontFamily: "'Inter', sans-serif", fontWeight: 700, fontSize: "0.82rem",
-                color: "#6b7280", padding: "6px 10px", borderRadius: 8,
-              }}
-            >
-              Q&amp;A
-            </button>
-          )}
+          {/* Public Q&A nav button removed — the answered-questions
+              section no longer renders on public profiles. */}
           {!previewOverlay && (
             <a
               href="/auth"
@@ -1376,28 +1358,6 @@ export default function CreatorProfilePage({ params }: { params: Promise<{ usern
               />
             </div>
 
-            {/* Phone — INR creators only. Razorpay needs it for UPI/EMI,
-               and prefilling here skips the modal's contact prompt. */}
-            {((display as any)?.currency || "").toLowerCase() === "inr" && (
-              <div>
-                <label style={{ display: "block", color: "var(--muted)", fontSize: "0.78rem", fontWeight: 700, textTransform: "uppercase", marginBottom: 6 }}>
-                  Phone (optional)
-                </label>
-                <input
-                  className="input-brutal"
-                  type="tel"
-                  placeholder="10-digit Indian mobile (e.g. 9999999999)"
-                  value={phone}
-                  onChange={e => setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
-                  pattern="[6-9][0-9]{9}"
-                  inputMode="numeric"
-                />
-                <p style={{ color: "var(--muted)", fontSize: "0.72rem", marginTop: 4 }}>
-                  Optional — speeds up checkout. Required for UPI payments.
-                </p>
-              </div>
-            )}
-
             {/* Price summary — only when Stripe is ready */}
             {display.stripeOnboardingComplete && (
               <div style={{
@@ -1465,142 +1425,6 @@ export default function CreatorProfilePage({ params }: { params: Promise<{ usern
       {/* ══════════════════════════════════════════════════════ */}
       {/* BONUS — PUBLIC Q&A                                     */}
       {/* ══════════════════════════════════════════════════════ */}
-      {publicQA.length > 0 && (
-        <div id="public-qa" style={{ marginTop: 48 }}>
-          <button
-            type="button"
-            onClick={() => setPublicQaCollapsed(c => !c)}
-            aria-expanded={!publicQaCollapsed}
-            aria-controls="public-qa-list"
-            style={{
-              display: "flex", alignItems: "center", gap: 12, marginBottom: 20,
-              background: "none", border: "none", padding: 0, cursor: "pointer",
-              width: "100%", textAlign: "left",
-            }}
-          >
-            <span style={{
-              background: "#ede9fe", color: "var(--purple)",
-              borderRadius: 99, padding: "4px 16px",
-              fontSize: "0.72rem", fontWeight: 800, letterSpacing: "0.06em",
-              textTransform: "uppercase", border: "1px solid rgba(124,58,237,0.2)",
-            }}>
-              🌐 Public Q&amp;A
-            </span>
-            <span style={{ color: "var(--muted)", fontSize: "0.82rem" }}>
-              {publicQA.length} answer{publicQA.length !== 1 ? "s" : ""} shared by {display.displayName}
-            </span>
-            <span style={{
-              marginLeft: "auto", color: "var(--purple)", fontSize: "0.82rem", fontWeight: 700,
-              display: "inline-flex", alignItems: "center", gap: 4,
-            }}>
-              {publicQaCollapsed ? "Show" : "Hide"} <span style={{ transform: publicQaCollapsed ? "rotate(0deg)" : "rotate(180deg)", transition: "transform 0.2s" }}>▾</span>
-            </span>
-          </button>
-
-          {!publicQaCollapsed && (
-          <div id="public-qa-list" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-            {publicQA.map((qa) => {
-              const exp = qaExpanded[qa.id!];
-              return (
-                <div key={qa.id} style={{
-                  background: "#fff",
-                  border: "1px solid #e5e7eb",
-                  borderRadius: 16,
-                  overflow: "hidden",
-                  boxShadow: "0 2px 12px rgba(0,0,0,0.06)",
-                }}>
-                  {/* Question */}
-                  <div style={{ background: "#f9fafb", borderBottom: "1.5px solid #e5e7eb", padding: "16px 20px" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
-                      <div>
-                        <span style={{
-                          display: "inline-block",
-                          background: "#ede9fe", color: "var(--purple)",
-                          borderRadius: 99, padding: "1px 10px",
-                          fontSize: "0.68rem", fontWeight: 700,
-                          marginBottom: 6, textTransform: "uppercase",
-                        }}>❓ Question</span>
-                        <p style={{ margin: 0, color: "#1f2937", fontWeight: 600, fontSize: "0.93rem", lineHeight: 1.6 }}>
-                          {renderTextWithLinks(qa.content)}
-                        </p>
-                      </div>
-                      <span style={{ color: "#9ca3af", fontSize: "0.74rem", whiteSpace: "nowrap", flexShrink: 0 }}>
-                        {timeAgo(qa.answeredAt || qa.createdAt)}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Answer */}
-                  <div style={{ padding: "16px 20px" }}>
-                    <span style={{
-                      display: "inline-flex", alignItems: "center", gap: 5,
-                      background: "#dcfce7", color: "#166534",
-                      borderRadius: 99, padding: "1px 10px",
-                      fontSize: "0.68rem", fontWeight: 700,
-                      marginBottom: 8, textTransform: "uppercase",
-                    }}>✅ {display.displayName}&apos;s Answer</span>
-                    <p style={{
-                      margin: 0, color: "#374151", lineHeight: 1.75, fontSize: "0.93rem",
-                      overflow: exp ? "visible" : "hidden",
-                      display: exp ? "block" : "-webkit-box",
-                      WebkitLineClamp: exp ? undefined : 4,
-                      WebkitBoxOrient: "vertical" as const,
-                    }}>
-                      {qa.response ? renderTextWithLinks(qa.response) : ""}
-                    </p>
-                    {(qa.response?.length ?? 0) > 280 && (
-                      <button
-                        onClick={() => setQaExpanded(prev => ({ ...prev, [qa.id!]: !prev[qa.id!] }))}
-                        style={{
-                          background: "none", border: "none", cursor: "pointer",
-                          color: "var(--purple)", fontWeight: 700, fontSize: "0.8rem",
-                          padding: 0, marginTop: 8, display: "block",
-                        }}
-                      >
-                        {exp ? "Show less ▲" : "Read full answer ▼"}
-                      </button>
-                    )}
-                    {qa.answerUrl && (
-                      <a href={qa.answerUrl} target="_blank" rel="noopener noreferrer"
-                        style={{
-                          display: "inline-flex", alignItems: "center", gap: 6,
-                          marginTop: 10, color: "var(--purple)", fontWeight: 700, fontSize: "0.83rem",
-                          background: "#ede9fe", borderRadius: 99, padding: "4px 14px",
-                          textDecoration: "none", border: "1px solid rgba(124,58,237,0.2)",
-                        }}>
-                        🔗 View attached resource
-                      </a>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-          )}
-
-          <div style={{
-            marginTop: 28, textAlign: "center",
-            border: "1.5px solid rgba(124,58,237,0.15)",
-            borderRadius: 20, padding: "28px 24px",
-            background: "linear-gradient(135deg, #faf5ff, #fff)",
-            boxShadow: "0 6px 24px rgba(124,58,237,0.1)",
-          }}>
-            <p style={{ fontWeight: 800, fontSize: "1.05rem", marginBottom: 4, color: "var(--text)" }}>
-              Want a personalised answer?
-            </p>
-            <p style={{ color: "var(--muted)", fontSize: "0.88rem", marginBottom: 16 }}>
-              Ask {display.displayName} your own question — answered within {slaLabel}.
-            </p>
-            <button
-              onClick={() => document.getElementById("ask")?.scrollIntoView({ behavior: "smooth" })}
-              className="btn-brutal btn-purple"
-              style={{ padding: "12px 28px", fontSize: "0.9rem" }}
-            >
-              Ask Now ↑
-            </button>
-          </div>
-        </div>
-      )}
     </div>
 
     {/* POWERED-BY FOOTER */}

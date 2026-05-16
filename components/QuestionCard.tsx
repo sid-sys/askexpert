@@ -49,8 +49,6 @@ export default function QuestionCard({ question, onAnswered }: QuestionCardProps
   const [responseText, setResponseText] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
-  const [isPublic, setIsPublic] = useState(!!question.isPublicAnswer);
-  const [togglingPublic, setTogglingPublic] = useState(false);
   const [optimisticStatus, setOptimisticStatus] = useState(question.status);
   const [optimisticResponse, setOptimisticResponse] = useState(question.response);
 
@@ -469,39 +467,9 @@ export default function QuestionCard({ question, onAnswered }: QuestionCardProps
             ✏️ Answer
           </button>
         )}
-        {optimisticStatus === "ANSWERED" && question.id && (
-          <button
-            type="button"
-            disabled={togglingPublic}
-            title={isPublic
-              ? "This answer is visible on your public profile to anyone who visits it. Click to make it private again."
-              : "Publish this Q&A on your public profile so anyone visiting can read it. The asker stays anonymous. You can revert anytime."}
-            aria-pressed={isPublic}
-            onClick={async () => {
-              setTogglingPublic(true);
-              try {
-                const next = !isPublic;
-                await updateDoc(doc(db, COLLECTIONS.QUESTIONS, question.id!), {
-                  isPublicAnswer: next,
-                  updatedAt: serverTimestamp()
-                });
-                setIsPublic(next);
-              } catch { /* ignore */ } finally { setTogglingPublic(false); }
-            }}
-            style={{
-              display: "flex", alignItems: "center", gap: 6,
-              background: isPublic ? "#dcfce7" : "#f9fafb", color: isPublic ? "#166534" : "#6b7280",
-              border: `1.5px solid ${isPublic ? "#bbf7d0" : "#e5e7eb"}`, borderRadius: 99, padding: "8px 18px",
-              fontWeight: 700, fontSize: "0.82rem", cursor: togglingPublic ? "not-allowed" : "pointer", transition: "all 0.2s",
-            }}
-          >
-            {togglingPublic
-              ? "…"
-              : isPublic
-              ? <><span style={{ fontSize: "0.9rem" }}>🌐</span> Public on Profile · Click to make private</>
-              : <><span style={{ fontSize: "0.9rem" }}>🔒</span> Make Public</>}
-          </button>
-        )}
+        {/* Make Public / Make Private toggle removed — the public Q&A
+            section on creator profiles is hidden site-wide, so this
+            control had no observable effect for fans. */}
       </div>
 
       {/* Hidden file input */}
