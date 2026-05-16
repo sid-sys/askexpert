@@ -9,6 +9,7 @@ import {
 } from "react";
 import {
   User,
+  signInWithPopup,
   signInWithRedirect,
   getRedirectResult,
   GoogleAuthProvider,
@@ -240,15 +241,44 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // Switched from signInWithPopup → signInWithRedirect. The popup-based
-  // flow flooded the console with Cross-Origin-Opener-Policy warnings
-  // because the popup lives on Firebase's hosting domain (firebaseapp.com)
-  // and its own COOP blocks the post-auth window.close(). Redirect avoids
-  // the popup entirely — full-page navigation to Google, then back to us.
-  // The result is collected on mount in the getRedirectResult effect below.
+  // Use popup as primary, with redirect as a fallback for mobile/in-app
+  // browsers that block popups.
+  //
+  // We previously used signInWithRedirect to dodge a flood of Cross-Origin-
+  // Opener-Policy warnings the popup produces (Firebase's auth handler at
+  // firebaseapp.com has its own COOP, so window.close() after auth logs a
+  // warning). But modern browsers now partition sessionStorage by top-level
+  // site, and redirect *relies* on shared storage between firebaseapp.com
+  // and askexpert.ink — so the return trip throws "missing initial state"
+  // and the user lands back on the auth page with no session.
+  //
+  // Popup keeps everything inside one top-level context (askexpert.ink),
+  // so storage stays connected. COOP warnings are cosmetic. Once
+  // auth.askexpert.ink is set up as a same-eTLD subdomain, redirect will
+  // work too and we can swap back if preferred.
   const signInWithGoogle = async () => {
     const provider = new GoogleAuthProvider();
-    await signInWithRedirect(auth, provider);
+    try {
+      const result = await signInWithPopup(auth, provider);
+      // ensureUserDoc creates the Firestore profile on first sign-in.
+      // Without this, brand-new Google users would land on /dashboard
+      // with userProfile=null and the auth-page redirect effect would
+      // never fire because it waits for userProfile.
+      if (result.user) {
+        await ensureUserDoc(result.user);
+      }
+    } catch (err: any) {
+      // Common popup failure modes — fall back to redirect:
+      //   auth/popup-blocked        — browser blocks popups outright
+      //   auth/popup-closed-by-user — user dismissed (don't fallback)
+      //   auth/cancelled-popup-request — second popup raced first
+      const code = err?.code;
+      if (code === "auth/popup-blocked" || code === "auth/operation-not-supported-in-this-environment") {
+        await signInWithRedirect(auth, provider);
+        return;
+      }
+      throw err;
+    }
   };
 
   const signInWithEmail = async (email: string, password: string) => {
