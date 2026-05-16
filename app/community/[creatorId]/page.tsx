@@ -48,32 +48,47 @@ export default function CommunityPage() {
   }
 
   return (
-    <div style={{ minHeight: "100vh", background: "#f8f7ff" }}>
+    <div style={{ minHeight: "100vh", background: "#0d0820", padding: "16px 12px" }}>
       <div style={{
-        maxWidth: 960, margin: "0 auto", padding: "16px 16px 4px",
-        display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12,
+        maxWidth: 720, margin: "0 auto 12px",
+        display: "flex", alignItems: "center", gap: 12,
+        color: "#f5f3ff",
       }}>
-        <div>
-          <h1 style={{ fontFamily: "'Outfit',sans-serif", fontSize: "1.4rem", fontWeight: 800, color: "#1f2937", margin: 0 }}>
-            {creatorMeta?.displayName ? `${creatorMeta.displayName}'s community` : "Community"}
-          </h1>
+        <button
+          onClick={() => router.back()}
+          aria-label="Back"
+          style={{
+            width: 36, height: 36, borderRadius: "50%",
+            border: "none", background: "rgba(255,255,255,0.08)", color: "#f5f3ff",
+            cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+            flexShrink: 0,
+          }}
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="15 18 9 12 15 6"/>
+          </svg>
+        </button>
+        <div style={{
+          width: 38, height: 38, borderRadius: "50%",
+          background: "linear-gradient(135deg,#7c3aed,#a855f7)", color: "#fff",
+          display: "grid", placeItems: "center",
+          fontFamily: "'Outfit',sans-serif", fontWeight: 800, fontSize: "0.85rem",
+          flexShrink: 0,
+        }}>
+          {(creatorMeta?.displayName || creatorMeta?.username || "?")[0].toUpperCase()}
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontFamily: "'Outfit',sans-serif", fontWeight: 800, fontSize: "0.98rem", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+            {creatorMeta?.displayName ? `${creatorMeta.displayName}'s circle ✨` : "Community"}
+          </div>
           {creatorMeta?.username && (
-            <a href={`/${creatorMeta.username}`} style={{ color: "#7c3aed", fontSize: "0.85rem", textDecoration: "none", fontWeight: 600 }}>
-              @{creatorMeta.username} →
+            <a href={`/${creatorMeta.username}`} style={{ color: "rgba(245,243,255,0.6)", fontSize: "0.78rem", textDecoration: "none", fontFamily: "'Outfit',sans-serif" }}>
+              @{creatorMeta.username} ✓
             </a>
           )}
         </div>
-        <button
-          onClick={() => router.back()}
-          style={{
-            padding: "8px 14px", borderRadius: 99, border: "1.5px solid #e5e7eb",
-            background: "#fff", color: "#374151", fontWeight: 700, fontSize: "0.82rem", cursor: "pointer",
-          }}
-        >
-          ← Back
-        </button>
       </div>
-      <div style={{ maxWidth: 960, margin: "0 auto", padding: "0 8px 24px" }}>
+      <div style={{ maxWidth: 720, margin: "0 auto" }}>
         <CommunityChat creatorId={params!.creatorId} />
       </div>
     </div>
