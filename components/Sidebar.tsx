@@ -16,7 +16,7 @@ export default function Sidebar() {
   // Profile-menu state moved to /upgrade. The avatar at the bottom of the
   // sidebar now navigates straight there instead of popping a local menu.
 
-  const APP_ROUTES = ["/dashboard", "/questions", "/fans", "/community", "/profile", "/analytics", "/admin", "/upgrade"];
+  const APP_ROUTES = ["/dashboard", "/questions", "/fans", "/profile", "/analytics", "/admin", "/upgrade"];
   const showSidebar = !!user && APP_ROUTES.some(r => pathname?.startsWith(r));
   const [isNarrow, setIsNarrow] = useState(false);
   
@@ -320,19 +320,6 @@ export default function Sidebar() {
             <span style={css.labelSpan}>Fans</span>
           </NavItem>
 
-          {/* Creator's own community room. Links to /community/{uid} which
-              renders the same CommunityChat component fans see, but the
-              creator is the channel admin (can post + run polls). */}
-          {user && (
-            <NavItem href={`/community/${user.uid}`} active={isActive("/community")} tooltipLabel="Community">
-              <span style={css.iconWrap}>
-                <svg width="20" height="20" fill="none" viewBox="0 0 24 24">
-                  <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                </svg>
-              </span>
-              <span style={css.labelSpan}>Community</span>
-            </NavItem>
-          )}
 
           <NavItem href="/analytics" active={isActive("/analytics")} tooltipLabel="Analytics">
             <span style={css.iconWrap}>

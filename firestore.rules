@@ -161,30 +161,6 @@ service cloud.firestore {
     }
 
     // ════════════════════════════════════════════════════════════════════════
-    // COMMUNITIES collection (creator broadcast feed)
-    //   /communities/{creatorId}/posts/{postId}
-    //     - Read: any authenticated user. The UI gates visibility to active
-    //       subscribers, but rules stay permissive to avoid expensive
-    //       cross-collection exists() checks. Post content is non-sensitive
-    //       (it's a broadcast meant to be widely shared).
-    //     - Create / update / delete: only the creator themselves
-    //       (uid in the path must match the caller).
-    //   /communities/{creatorId}/posts/{postId}/reactions/{userId}
-    //     - Read: any authenticated user.
-    //     - Create / update / delete: only the user themselves (userId in
-    //       the path must match the caller).
-    // ════════════════════════════════════════════════════════════════════════
-    match /communities/{creatorId}/posts/{postId} {
-      allow read: if isAuth();
-      allow create, update, delete: if isOwner(creatorId);
-
-      match /reactions/{userId} {
-        allow read: if isAuth();
-        allow create, update, delete: if isOwner(userId);
-      }
-    }
-
-    // ════════════════════════════════════════════════════════════════════════
     // Default: deny everything else
     // ════════════════════════════════════════════════════════════════════════
     match /{document=**} {

@@ -46,11 +46,11 @@ const WHO_ITS_FOR = [
   {
     icon: "🎙️",
     audience: "Creators",
-    pitch: "Turn your DMs into income. Set a price per question or a paid community — get paid for the advice you'd otherwise give for free.",
+    pitch: "Turn your DMs into income. Set a price per question or a monthly subscription — get paid for the advice you'd otherwise give for free.",
     bullets: [
       "Stop answering the same question for free in DMs",
       "Filter out tire-kickers — paid questions only",
-      "Build a paid community: broadcast updates, run polls, chat with members",
+      "Subscribers chat with you directly, no extra work",
     ],
   },
   {
@@ -79,7 +79,7 @@ const FAQS = [
     a: "Every question has an SLA you set (3–168 hours). If the expert doesn't answer in time, the fan is automatically refunded — no questions asked.",
   },
   {
-    q: "Can I leave a community at any time?",
+    q: "Can I cancel my subscription?",
     a: "Anytime. Cancel at cycle end to keep access until your next billing date, or cancel immediately. Refunds for unused days aren't issued, but you keep the conversation history.",
   },
   {
