@@ -26,6 +26,13 @@ function isIgnorable(reason: any): boolean {
   if (message.includes("Script error.")) return true;
   // Stripe.js cancellations on route changes.
   if (message.includes("Cancelled by user") || message.includes("payment_intent_unexpected_state")) return true;
+  // "TypeError: Failed to fetch" is what the browser throws when a network
+  // request is cancelled mid-flight — most commonly when the user navigates
+  // away before a fetch resolves, but also when a third-party script (CSP
+  // mismatch, blocked by an extension, captive portal) can't reach a host.
+  // None of these are bugs in our app, so they shouldn't pop the modal.
+  if (name === "TypeError" && message.includes("Failed to fetch")) return true;
+  if (message === "Load failed") return true; // Safari's equivalent
   return false;
 }
 
