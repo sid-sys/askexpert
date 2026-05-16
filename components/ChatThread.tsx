@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import {
   collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, limit,
 } from "firebase/firestore";
@@ -460,12 +460,10 @@ export default function ChatThread({
     }}>
       {showHeader && (
         <header style={{
-          padding: "14px 18px",
+          padding: "12px 16px",
           borderBottom: "1px solid #f0f0f0",
-          display: "flex", alignItems: "center", gap: 12,
+          display: "flex", alignItems: "center", gap: 10,
           background: "#fff",
-          // Explicit flex-shrink lock + sticky-top so the header never moves
-          // when messages scroll, even if the parent height calc is off.
           flexShrink: 0,
           position: "sticky", top: 0,
           zIndex: 2,
@@ -478,32 +476,88 @@ export default function ChatThread({
               title="Back"
               className="chat-icon-btn chat-back-btn"
               style={{
-                width: 40, height: 40, borderRadius: "50%",
-                border: "none", background: "#f3f4f6", color: "#1f2937",
+                width: 32, height: 32, borderRadius: "50%",
+                border: "none", background: "transparent", color: "#1f2937",
                 cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
                 flexShrink: 0,
                 padding: 0,
               }}
-              onMouseEnter={e => (e.currentTarget.style.background = "#e5e7eb")}
-              onMouseLeave={e => (e.currentTarget.style.background = "#f3f4f6")}
+              onMouseEnter={e => (e.currentTarget.style.background = "#f3f4f6")}
+              onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
             >
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                 <polyline points="15 18 9 12 15 6"/>
               </svg>
             </button>
           )}
-          <div style={{ width: 36, height: 36, borderRadius: "50%", background: "linear-gradient(135deg,#7c3aed,#a855f7)", color: "#fff", display: "grid", placeItems: "center", fontFamily: "'Outfit',sans-serif", fontWeight: 800, fontSize: "0.88rem", flexShrink: 0 }}>
+
+          {/* Avatar + (name with chevron) + subtitle */}
+          <div style={{
+            width: 38, height: 38, borderRadius: "50%",
+            background: "linear-gradient(135deg,#7c3aed,#a855f7)", color: "#fff",
+            display: "grid", placeItems: "center",
+            fontFamily: "'Outfit',sans-serif", fontWeight: 800, fontSize: "0.92rem",
+            flexShrink: 0,
+          }}>
             {initial}
           </div>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontFamily: "'Outfit',sans-serif", fontWeight: 800, color: "#1f2937", fontSize: "0.95rem", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-              {counterpartName}
+          <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", justifyContent: "center" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 4, minWidth: 0 }}>
+              <span style={{
+                fontFamily: "'Outfit',sans-serif", fontWeight: 700,
+                color: "#1f2937", fontSize: "0.95rem",
+                whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+              }}>
+                {counterpartName}
+              </span>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                <polyline points="9 18 15 12 9 6"/>
+              </svg>
             </div>
             {counterpartSubtitle && (
-              <div style={{ fontFamily: "'Outfit',sans-serif", color: "#9ca3af", fontSize: "0.74rem" }}>
+              <div style={{ fontFamily: "'Outfit',sans-serif", color: "#9ca3af", fontSize: "0.74rem", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                 {counterpartSubtitle}
               </div>
             )}
+          </div>
+
+          {/* Header action icons (decorative for now — no call backend).
+              Sit at the top-right like a typical messaging app. Hidden on
+              very narrow widths via CSS to keep the name readable. */}
+          <div className="chat-header-actions" style={{ display: "flex", gap: 4, flexShrink: 0 }}>
+            <button
+              type="button"
+              aria-label="Voice call"
+              title="Voice call — coming soon"
+              className="chat-icon-btn"
+              style={{
+                width: 36, height: 36, borderRadius: "50%",
+                border: "none", background: "transparent", color: "#374151",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                cursor: "not-allowed", padding: 0, opacity: 0.6,
+              }}
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.37 1.9.72 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.35 1.85.59 2.81.72A2 2 0 0 1 22 16.92z"/>
+              </svg>
+            </button>
+            <button
+              type="button"
+              aria-label="Video call"
+              title="Video call — coming soon"
+              className="chat-icon-btn"
+              style={{
+                width: 36, height: 36, borderRadius: "50%",
+                border: "none", background: "transparent", color: "#374151",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                cursor: "not-allowed", padding: 0, opacity: 0.6,
+              }}
+            >
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polygon points="23 7 16 12 23 17 23 7"/>
+                <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
+              </svg>
+            </button>
           </div>
         </header>
       )}
@@ -527,14 +581,29 @@ export default function ChatThread({
           <div style={{ margin: "auto", textAlign: "center", color: "#9ca3af", fontFamily: "'Outfit',sans-serif", fontSize: "0.9rem", padding: 20 }}>
             No messages yet. Say hi 👋
           </div>
-        ) : messages.map((m) => (
-          <MessageBubble
-            key={m.id}
-            m={m}
-            isMine={m.senderRole === viewerRole}
-            onReply={() => setReplyingTo({ id: m.id, snippet: messageSnippet(m), senderRole: m.senderRole })}
-          />
-        ))}
+        ) : messages.map((m, idx) => {
+          const prev = messages[idx - 1];
+          const next = messages[idx + 1];
+          // Show a centered timestamp before the first message and whenever
+          // there's a 10+ minute gap since the previous one.
+          const gapMs = prev ? (m.createdAt.getTime() - prev.createdAt.getTime()) : Infinity;
+          const showSeparator = gapMs > 10 * 60 * 1000;
+          // Avatar shows only on the LAST message in a run from the same
+          // sender — keeps long runs compact.
+          const isLastInRun = !next || next.senderRole !== m.senderRole;
+          return (
+            <Fragment key={m.id}>
+              {showSeparator && <TimeSeparator at={m.createdAt} />}
+              <MessageBubble
+                m={m}
+                isMine={m.senderRole === viewerRole}
+                onReply={() => setReplyingTo({ id: m.id, snippet: messageSnippet(m), senderRole: m.senderRole })}
+                counterpartAvatar={counterpartInitial || counterpartName}
+                showCounterpartAvatar={isLastInRun && m.senderRole !== viewerRole}
+              />
+            </Fragment>
+          );
+        })}
       </div>
 
       {error && (
@@ -646,13 +715,12 @@ export default function ChatThread({
           ) : (
           <div className="chat-input-row" style={{
             borderTop: (pendingFiles.length > 0 || replyingTo) ? "none" : "1px solid #f0f0f0",
-            padding: 8, display: "flex", gap: 6, alignItems: "center",
+            padding: "10px 12px",
+            display: "flex", gap: 8, alignItems: "center",
             background: "#fff",
-            flexShrink: 0, // Pin to bottom — never gets squeezed by the messages list
+            flexShrink: 0,
             minWidth: 0,
-            // The safe-area inset keeps the send button above the iOS home
-            // indicator when the chat is in the mobile overlay mode.
-            paddingBottom: `calc(8px + env(safe-area-inset-bottom))`,
+            paddingBottom: `calc(10px + env(safe-area-inset-bottom))`,
           }}>
             <input ref={fileInputRef} type="file" multiple accept="image/*,audio/*,video/*,application/pdf,application/zip,.doc,.docx,.txt,.xlsx,.csv" style={{ display: "none" }} onChange={onFilePicked} />
             <button
@@ -661,8 +729,19 @@ export default function ChatThread({
               aria-label="Attach file"
               className="chat-icon-btn"
               onClick={() => fileInputRef.current?.click()}
-              style={{ width: 38, height: 38, borderRadius: "50%", border: "1.5px solid #e5e7eb", background: "#fff", color: "#6b7280", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.05rem", flexShrink: 0, padding: 0 }}
-            >📎</button>
+              style={{
+                width: 36, height: 36, borderRadius: "50%",
+                border: "none", background: "#7c3aed", color: "#fff",
+                cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+                fontSize: "1.05rem", flexShrink: 0, padding: 0,
+                boxShadow: "0 2px 6px rgba(124,58,237,0.25)",
+              }}
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="12" y1="5" x2="12" y2="19"/>
+                <line x1="5" y1="12" x2="19" y2="12"/>
+              </svg>
+            </button>
             <button
               type="button"
               title="Record voice note"
@@ -670,8 +749,24 @@ export default function ChatThread({
               className="chat-icon-btn"
               onClick={startRecording}
               disabled={!!pendingVoice}
-              style={{ width: 38, height: 38, borderRadius: "50%", border: "1.5px solid #e5e7eb", background: "#fff", color: "#6b7280", cursor: pendingVoice ? "not-allowed" : "pointer", opacity: pendingVoice ? 0.4 : 1, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.05rem", flexShrink: 0, padding: 0 }}
-            >🎙️</button>
+              style={{
+                width: 36, height: 36, borderRadius: "50%",
+                border: "none", background: "transparent", color: "#6b7280",
+                cursor: pendingVoice ? "not-allowed" : "pointer",
+                opacity: pendingVoice ? 0.4 : 1,
+                display: "flex", alignItems: "center", justifyContent: "center",
+                flexShrink: 0, padding: 0,
+              }}
+              onMouseEnter={e => { if (!pendingVoice) (e.currentTarget as HTMLElement).style.background = "#f3f4f6"; }}
+              onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = "transparent"}
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+                <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                <line x1="12" y1="19" x2="12" y2="23"/>
+                <line x1="8" y1="23" x2="16" y2="23"/>
+              </svg>
+            </button>
 
             {/* Where the text input normally sits — when a voice note is staged,
                 the pill becomes an inline audio preview with its own close X. */}
@@ -700,9 +795,18 @@ export default function ChatThread({
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); performSend(); } }}
-                placeholder="Type your message…"
+                placeholder="Message..."
                 disabled={sending}
-                style={{ flex: 1, minWidth: 0, height: 40, borderRadius: 99, border: "1.5px solid #e5e7eb", padding: "0 14px", fontFamily: "'Outfit',sans-serif", fontSize: "0.9rem", outline: "none", boxSizing: "border-box" }}
+                style={{
+                  flex: 1, minWidth: 0, height: 40,
+                  borderRadius: 999,
+                  border: "none",
+                  background: "#f1f3f5",
+                  padding: "0 16px",
+                  fontFamily: "'Outfit',sans-serif", fontSize: "0.92rem",
+                  outline: "none", boxSizing: "border-box",
+                  color: "#1f2937",
+                }}
               />
             )}
 
@@ -714,9 +818,28 @@ export default function ChatThread({
                   disabled={!canSend}
                   aria-label="Send message"
                   className="chat-send-btn"
-                  style={{ height: 40, padding: "0 14px", borderRadius: 99, border: "none", background: canSend ? "linear-gradient(135deg,#7c3aed,#a855f7)" : "#e5e7eb", color: "#fff", fontWeight: 800, fontFamily: "'Outfit',sans-serif", fontSize: "0.85rem", cursor: canSend ? "pointer" : "not-allowed", flexShrink: 0 }}
+                  style={{
+                    width: 40, height: 40, borderRadius: "50%",
+                    border: "none",
+                    background: canSend ? "linear-gradient(135deg,#7c3aed,#a855f7)" : "#e5e7eb",
+                    color: "#fff",
+                    cursor: canSend ? "pointer" : "not-allowed",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    flexShrink: 0, padding: 0,
+                    transition: "transform 0.1s",
+                  }}
+                  onMouseDown={e => canSend && ((e.currentTarget as HTMLElement).style.transform = "scale(0.92)")}
+                  onMouseUp={e => ((e.currentTarget as HTMLElement).style.transform = "")}
+                  onMouseLeave={e => ((e.currentTarget as HTMLElement).style.transform = "")}
                 >
-                  {sending ? "…" : "Send"}
+                  {sending ? (
+                    <span style={{ fontSize: "1rem", fontWeight: 800 }}>…</span>
+                  ) : (
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <line x1="22" y1="2" x2="11" y2="13"/>
+                      <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+                    </svg>
+                  )}
                 </button>
               );
             })()}
@@ -775,26 +898,56 @@ export default function ChatThread({
 // ── Single message bubble — split out so each row owns its own long-press
 // detector (hooks can't live inside a .map() callback).
 function MessageBubble({
-  m, isMine, onReply,
+  m, isMine, onReply, counterpartAvatar, showCounterpartAvatar,
 }: {
   m: ChatMessage;
   isMine: boolean;
   onReply: () => void;
+  counterpartAvatar?: string;
+  // Only render the left-side avatar on the LAST message in a run from
+  // the counterpart — keeps the chat list compact instead of repeating
+  // the avatar next to every message.
+  showCounterpartAvatar: boolean;
 }) {
   const longPress = useLongPress(onReply);
   const reply = m.replyTo;
+  const avatarInitial = (counterpartAvatar || "?")[0]?.toUpperCase() || "?";
   return (
-    <div style={{ display: "flex", justifyContent: isMine ? "flex-end" : "flex-start" }}>
+    <div style={{
+      display: "flex",
+      justifyContent: isMine ? "flex-end" : "flex-start",
+      alignItems: "flex-end",
+      gap: 8,
+    }}>
+      {/* Counterpart avatar slot — reserved even when hidden so a run of
+          messages stays left-aligned with the same indent. */}
+      {!isMine && (
+        <div style={{
+          width: 28, height: 28, borderRadius: "50%",
+          background: "linear-gradient(135deg,#7c3aed,#a855f7)",
+          color: "#fff",
+          display: showCounterpartAvatar ? "grid" : "none",
+          placeItems: "center", fontFamily: "'Outfit',sans-serif",
+          fontWeight: 800, fontSize: "0.72rem",
+          flexShrink: 0,
+        }}>
+          {avatarInitial}
+        </div>
+      )}
+      {/* Empty placeholder when avatar is hidden so bubble keeps its indent */}
+      {!isMine && !showCounterpartAvatar && <div style={{ width: 28, flexShrink: 0 }} />}
+
       <div
         {...longPress}
         style={{
-          maxWidth: "75%",
-          background: isMine ? "linear-gradient(135deg,#7c3aed,#a855f7)" : "#fff",
+          maxWidth: "72%",
+          background: isMine ? "linear-gradient(135deg,#7c3aed,#a855f7)" : "#f1f3f5",
           color: isMine ? "#fff" : "#1f2937",
-          border: isMine ? "none" : "1px solid #e5e7eb",
-          borderRadius: isMine ? "14px 14px 4px 14px" : "14px 14px 14px 4px",
-          padding: m.attachments.length > 0 || !m.text || reply ? "8px" : "8px 14px",
-          fontSize: "0.9rem",
+          border: "none",
+          // Pill-shaped — fully rounded for a softer look matching iMessage / IG.
+          borderRadius: 20,
+          padding: m.attachments.length > 0 || !m.text || reply ? "8px" : "9px 16px",
+          fontSize: "0.92rem",
           lineHeight: 1.45,
           boxShadow: "0 1px 2px rgba(0,0,0,0.04)",
           userSelect: "none",
@@ -805,9 +958,9 @@ function MessageBubble({
         {reply && (
           <div style={{
             borderLeft: `3px solid ${isMine ? "rgba(255,255,255,0.6)" : "#a855f7"}`,
-            background: isMine ? "rgba(255,255,255,0.12)" : "#f5f3ff",
+            background: isMine ? "rgba(255,255,255,0.12)" : "#fff",
             color: isMine ? "#fff" : "#374151",
-            borderRadius: 8,
+            borderRadius: 12,
             padding: "6px 10px",
             marginBottom: 6,
             fontSize: "0.78rem",
@@ -824,10 +977,33 @@ function MessageBubble({
           <AttachmentBubble key={i} att={att} mine={isMine} />
         ))}
         {m.text && <div style={{ padding: m.attachments.length > 0 ? "6px 8px 2px" : 0 }}>{m.text}</div>}
-        <div style={{ fontSize: "0.66rem", opacity: 0.7, marginTop: 4, padding: m.attachments.length > 0 ? "0 8px 4px" : 0, textAlign: isMine ? "right" : "left" }}>
-          {timeAgo(m.createdAt)}
-        </div>
       </div>
+    </div>
+  );
+}
+
+// Centered timestamp separator — shown periodically (when there's a gap of
+// 10+ min between messages, or at the start of the thread).
+function TimeSeparator({ at }: { at: Date }) {
+  const today = new Date();
+  const sameDay = at.toDateString() === today.toDateString();
+  const yesterday = new Date(today.getTime() - 86400000).toDateString() === at.toDateString();
+  const label = sameDay
+    ? at.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })
+    : yesterday
+      ? `Yesterday, ${at.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}`
+      : at.toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+  return (
+    <div style={{
+      textAlign: "center",
+      color: "#9ca3af",
+      fontFamily: "'Outfit',sans-serif",
+      fontSize: "0.72rem",
+      fontWeight: 600,
+      padding: "8px 0 4px",
+      letterSpacing: "0.02em",
+    }}>
+      {label}
     </div>
   );
 }
