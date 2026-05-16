@@ -95,10 +95,24 @@ export async function POST(req: NextRequest) {
 
     try {
       const {
-        questionId, creatorId, creatorName, followerEmail, followerName,
+        questionId, creatorId, followerEmail, followerName,
         followerUid, content, pricePaid, expiresAt,
-        payoutMethod, feePercent, currency,
+        payoutMethod, feePercent, fx,
       } = meta;
+
+      // fx is packed as "origAmt:origCcy:creatorAmt:creatorCcy:rate" to
+      // stay under Razorpay's 15-key notes cap. Falls back to legacy
+      // shape for old orders (no fx key, treat pricePaid as INR-INR).
+      const fxParts = (fx ?? "").split(":");
+      const originalAmt   = parseInt(fxParts[0] ?? pricePaid);
+      const originalCcy   = (fxParts[1] ?? "inr").toLowerCase();
+      const creatorAmt    = parseInt(fxParts[2] ?? pricePaid);
+      const creatorCcy    = (fxParts[3] ?? "inr").toLowerCase();
+      const capturedFxRate = parseFloat(fxParts[4] ?? "1");
+
+      // creatorName is no longer in notes (15-key budget) — pull from
+      // the creator's user doc below, with a "The Creator" fallback.
+      const creatorName = "";
 
       // ROI: vacation-lead conversion check (mirrors Stripe path)
       const vacSubSnap = await adminDb.collection("vacation_subscriptions")
@@ -134,7 +148,9 @@ export async function POST(req: NextRequest) {
         content,
         response:              null,
         status:                "PENDING",
-        pricePaid:             parseInt(pricePaid),
+        // pricePaid keeps its legacy meaning = creator-currency amount, so
+        // dashboards reading older code paths still see the right value.
+        pricePaid:             creatorAmt,
         followerEmail,
         followerName,
         followerUid:           followerUid || null,
@@ -154,34 +170,54 @@ export async function POST(req: NextRequest) {
         notificationsSent:     false,
         isVacationConversion,
         attachmentUrls,
+        // FX snapshot — lets dashboard render in creator-currency and
+        // admin payouts route to the right bank without re-deriving.
+        originalAmount:        originalAmt,
+        originalCurrency:      originalCcy,
+        creatorAmount:         creatorAmt,
+        creatorCurrency:       creatorCcy,
+        fxRate:                capturedFxRate,
+        fxCapturedAt:          FieldValue.serverTimestamp(),
       });
 
-      // Earnings counters (paise — same minor-unit math as cents)
-      const grossPaise = parseInt(pricePaid);
-      const feePctAtPay = parseFloat(feePercent ?? "20");
-      const feePaise = Math.round(grossPaise * (feePctAtPay / 100));
-      const netPaise = grossPaise - feePaise;
+      // Earnings counters live in CREATOR-currency so the dashboard can
+      // render a single coherent total without per-record FX. Cross-currency
+      // wobble between checkout (when we captured fxRate) and payout
+      // settles only as much as one payment's value — small.
+      const grossCreator  = creatorAmt;
+      const feePctAtPay   = parseFloat(feePercent ?? "20");
+      const feeCreator    = Math.round(grossCreator * (feePctAtPay / 100));
+      const netCreator    = grossCreator - feeCreator;
       await adminDb.collection("users").doc(creatorId).set(
         {
-          totalEarnings:      FieldValue.increment(grossPaise),
-          totalCreatorNet:    FieldValue.increment(netPaise),
-          totalPlatformFee:   FieldValue.increment(feePaise),
-          oneTimeNetEarnings: FieldValue.increment(netPaise),
+          totalEarnings:      FieldValue.increment(grossCreator),
+          totalCreatorNet:    FieldValue.increment(netCreator),
+          totalPlatformFee:   FieldValue.increment(feeCreator),
+          oneTimeNetEarnings: FieldValue.increment(netCreator),
           updatedAt:          FieldValue.serverTimestamp(),
         },
         { merge: true }
       );
 
-      // Pending payout (manual_bank only — Razorpay flow is always manual_bank
-      // in v1; we don't yet support Razorpay Route)
+      // Pending payout records pay the creator in their OWN currency, so
+      // amount/currency reflect the creator side. originalAmount keeps the
+      // INR (or whatever) actually charged for reconciliation against
+      // Razorpay's settlement reports.
       await adminDb.collection("pendingPayouts").add({
         creatorId,
         creatorName:       creatorName ?? creatorData.displayName ?? "",
         creatorEmail:      creatorData.email ?? followerEmail,
-        amount:            netPaise,
-        platformFeeAmount: feePaise,
-        totalPaid:         grossPaise,
-        currency:          currency ?? "inr",
+        amount:            netCreator,
+        platformFeeAmount: feeCreator,
+        totalPaid:         grossCreator,
+        currency:          creatorCcy,
+        // FX snapshot mirrors the question doc.
+        originalAmount:    originalAmt,
+        originalCurrency:  originalCcy,
+        creatorAmount:     grossCreator,
+        creatorCurrency:   creatorCcy,
+        fxRate:            capturedFxRate,
+        fxCapturedAt:      FieldValue.serverTimestamp(),
         questionId,
         paymentType:       "per_question",
         status:            "pending",
@@ -197,7 +233,7 @@ export async function POST(req: NextRequest) {
 
       await adminDb.collection("users").doc(creatorId).set(
         {
-          pendingPayoutBalance: FieldValue.increment(netPaise),
+          pendingPayoutBalance: FieldValue.increment(netCreator),
           updatedAt: FieldValue.serverTimestamp(),
         },
         { merge: true }
@@ -221,9 +257,10 @@ export async function POST(req: NextRequest) {
               to:                followerEmail,
               creatorName:       creatorName ?? "your expert",
               question:          content ?? "",
-              price:             parseInt(pricePaid),
+              // Fan was charged in INR — show that on their receipt.
+              price:             originalAmt,
               expiresAt:         expiresAt,
-              currency:          currency ?? "inr",
+              currency:          originalCcy,
               responseTimeHours: creatorData.responseTimeHours || 72,
             });
             return "asker_email_sent";
@@ -238,7 +275,9 @@ export async function POST(req: NextRequest) {
                 question:          content || "",
                 askerEmail:        followerEmail,
                 askerName:         followerName,
-                price:             parseInt(pricePaid),
+                // Creator sees earnings in their own currency.
+                price:             creatorAmt,
+                currency:          creatorCcy,
                 category:          meta.category,
                 requestedReplyFormat: meta.requestedReplyFormat,
                 dashboardUrl:      `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/dashboard`,
@@ -301,8 +340,16 @@ export async function POST(req: NextRequest) {
     }
 
     try {
-      const { creatorId, creatorName, followerEmail, followerName,
-              followerUid, pricePaid, currency } = meta;
+      const { creatorId, followerEmail, followerName,
+              followerUid, pricePaid, fx } = meta;
+
+      const fxParts = (fx ?? "").split(":");
+      const originalAmt    = parseInt(fxParts[0] ?? pricePaid);
+      const originalCcy    = (fxParts[1] ?? "inr").toLowerCase();
+      const creatorAmt     = parseInt(fxParts[2] ?? pricePaid);
+      const creatorCcy     = (fxParts[3] ?? "inr").toLowerCase();
+      const capturedFxRate = parseFloat(fxParts[4] ?? "1");
+      const creatorName    = ""; // dropped from notes — fall back to user doc below
 
       // Idempotency: skip if a sub doc for this Razorpay subscription
       // already exists.
@@ -327,14 +374,22 @@ export async function POST(req: NextRequest) {
         followerEmail,
         followerName: followerName || null,
         status: "active",
-        pricePerMonth: parseInt(pricePaid),
-        currency: currency ?? "inr",
+        // pricePerMonth keeps legacy semantics = creator-currency.
+        pricePerMonth: creatorAmt,
+        currency: creatorCcy,
         razorpayCustomerId: sub.customer_id ?? null,
         razorpaySubscriptionId: sub.id,
         gateway: "razorpay",
         createdAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
         cancelledAt: null,
+        // FX snapshot for cross-currency subscriptions.
+        originalAmount:   originalAmt,
+        originalCurrency: originalCcy,
+        creatorAmount:    creatorAmt,
+        creatorCurrency:  creatorCcy,
+        fxRate:           capturedFxRate,
+        fxCapturedAt:     FieldValue.serverTimestamp(),
       });
 
       // Persist customer on the fan's user doc for future portal-style use
@@ -345,18 +400,18 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      // Credit the first-month earnings (mirrors Stripe path which credits
-      // at checkout.session.completed for subscription mode)
-      const grossPaise   = parseInt(pricePaid);
+      // Credit first-month earnings in CREATOR-currency (see one-time
+      // handler above for the rationale).
+      const grossCreator = creatorAmt;
       const subFeePct    = parseFloat(meta.feePercent ?? "20");
-      const subFeePaise  = Math.round(grossPaise * (subFeePct / 100));
-      const subNetPaise  = grossPaise - subFeePaise;
+      const subFeeCreator = Math.round(grossCreator * (subFeePct / 100));
+      const subNetCreator = grossCreator - subFeeCreator;
       await adminDb.collection("users").doc(creatorId).set(
         {
-          totalEarnings:           FieldValue.increment(grossPaise),
-          totalCreatorNet:         FieldValue.increment(subNetPaise),
-          totalPlatformFee:        FieldValue.increment(subFeePaise),
-          subscriptionNetEarnings: FieldValue.increment(subNetPaise),
+          totalEarnings:           FieldValue.increment(grossCreator),
+          totalCreatorNet:         FieldValue.increment(subNetCreator),
+          totalPlatformFee:        FieldValue.increment(subFeeCreator),
+          subscriptionNetEarnings: FieldValue.increment(subNetCreator),
           updatedAt:               FieldValue.serverTimestamp(),
         },
         { merge: true }
@@ -366,10 +421,16 @@ export async function POST(req: NextRequest) {
         creatorId,
         creatorName:       creatorData.displayName ?? creatorName ?? "",
         creatorEmail:      creatorData.email ?? "",
-        amount:            subNetPaise,
-        platformFeeAmount: subFeePaise,
-        totalPaid:         grossPaise,
-        currency:          currency ?? "inr",
+        amount:            subNetCreator,
+        platformFeeAmount: subFeeCreator,
+        totalPaid:         grossCreator,
+        currency:          creatorCcy,
+        originalAmount:    originalAmt,
+        originalCurrency:  originalCcy,
+        creatorAmount:     grossCreator,
+        creatorCurrency:   creatorCcy,
+        fxRate:            capturedFxRate,
+        fxCapturedAt:      FieldValue.serverTimestamp(),
         paymentType:       "subscription",
         razorpaySubscriptionId: sub.id,
         gateway:           "razorpay",
@@ -383,7 +444,7 @@ export async function POST(req: NextRequest) {
 
       await adminDb.collection("users").doc(creatorId).set(
         {
-          pendingPayoutBalance: FieldValue.increment(subNetPaise),
+          pendingPayoutBalance: FieldValue.increment(subNetCreator),
           updatedAt: FieldValue.serverTimestamp(),
         },
         { merge: true }
@@ -406,8 +467,9 @@ export async function POST(req: NextRequest) {
               to:              followerEmail,
               creatorName:     creatorName || creatorData.displayName || "your expert",
               creatorUsername: creatorData.username,
-              price:           parseInt(pricePaid),
-              currency:        currency ?? "inr",
+              // Fan sees what they were charged (INR via Razorpay).
+              price:           originalAmt,
+              currency:        originalCcy,
             });
           } catch (e: any) { console.error(`[Razorpay Webhook] fan email:`, e.message); }
         })(),
@@ -419,8 +481,9 @@ export async function POST(req: NextRequest) {
                 creatorName:     creatorData.displayName || creatorName || "Creator",
                 subscriberEmail: followerEmail,
                 subscriberName:  followerName,
-                price:           parseInt(pricePaid),
-                currency:        currency ?? "inr",
+                // Creator sees their own currency.
+                price:           creatorAmt,
+                currency:        creatorCcy,
                 dashboardUrl:    `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/fans`,
               });
             }

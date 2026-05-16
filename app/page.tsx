@@ -376,7 +376,7 @@ export default function LandingPage() {
           Two-column value prop so a first-time visitor can self-identify
           and see in one sentence what they get. Sits above testimonials
           so the "why bother" question is answered before the social proof. */}
-      <section style={{ background: "#fafafa", padding: "6rem 5%", borderTop: "1px solid #e5e7eb" }}>
+      <section id="who-its-for" style={{ background: "#fafafa", padding: "6rem 5%", borderTop: "1px solid #e5e7eb" }}>
         <div style={{ maxWidth: 1100, margin: "0 auto" }}>
           <div style={{ textAlign: "center", marginBottom: "3rem" }}>
             <h2 style={{ fontFamily: "'Outfit', sans-serif", fontSize: "clamp(1.8rem, 3vw, 2.8rem)", fontWeight: 800, color: "#1f2937" }}>

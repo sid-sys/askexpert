@@ -106,3 +106,14 @@ export function getPayoutThresholdMinor(currency?: string | null): number {
   const c = (currency ?? "usd").toLowerCase();
   return PAYOUT_THRESHOLD_MINOR[c] ?? PAYOUT_THRESHOLD_MINOR.usd;
 }
+
+// ── Country → currency mapping ──────────────────────────────────────────────
+// Binary by design: Indian visitors see INR, everyone else sees USD. Both
+// landing-page plan pricing and creator profile prices respect this. We
+// don't localise to GBP/EUR/etc. on purpose — fans outside India pay via
+// Stripe in the creator's currency (where the fan's bank does the FX),
+// and showing four currencies just to hide that detail adds confusion
+// without changing what's actually charged.
+export function currencyForCountry(country?: string | null): string {
+  return (country ?? "").toUpperCase() === "IN" ? "inr" : "usd";
+}

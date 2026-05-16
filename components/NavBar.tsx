@@ -123,14 +123,46 @@ export default function NavBar() {
         <span />
       )}
 
-      {/* DESKTOP NAV / AUTH NAV */}
+      {/* DESKTOP NAV / AUTH NAV
+          On the landing page, EVERYONE sees the marketing section anchors
+          (How It Works / Who It's For / Pricing). Auth state only changes
+          the right-side CTAs: signed-out → Sign in + Get Started; signed-in
+          → View Profile + Copy Link + Dashboard. */}
       <nav style={{ display: "flex", alignItems: "center", gap: "1rem" }}
-           className={!user ? "desktop-nav" : "auth-nav"}>
+           className={user ? "auth-nav" : pathname === "/" ? "landing-nav" : "desktop-nav"}>
+        {/* Marketing anchors — visible on the landing page regardless of auth.
+            Collapses on narrow viewports via the .marketing-links media query. */}
+        {pathname === "/" && !loading && (
+          <div className="marketing-links">
+            <a href="#how-it-works" className="nav-link">How It Works</a>
+            <a href="#who-its-for"  className="nav-link">Who It&apos;s For</a>
+            <a href="#pricing"      className="nav-link">Pricing</a>
+          </div>
+        )}
         {loading ? (
           <div style={{ width: 150, height: 40, background: "rgba(0,0,0,0.04)", borderRadius: 99 }} />
         ) : !user ? (
-          // ── Public / unauthenticated: render nothing on the top-right ──
-          null
+          // ── Public / unauthenticated ──
+          // Landing page → show Sign in + Get Started. Other unauthenticated
+          // pages (login, signup, /[username]) render no auth CTAs because
+          // those pages already have their own context-specific affordances.
+          pathname === "/" ? (
+            <>
+              <Link href="/login" className="nav-link" style={{ marginLeft: 4 }}>
+                Sign in
+              </Link>
+              <Link href="/signup" style={{
+                display: "inline-flex", alignItems: "center",
+                padding: "0.55rem 1.1rem", borderRadius: 99,
+                background: "linear-gradient(135deg, #7c3aed, #a855f7)",
+                color: "#fff", fontFamily: "'Inter', sans-serif",
+                fontWeight: 800, fontSize: "0.82rem", textDecoration: "none",
+                boxShadow: "0 4px 12px rgba(124,58,237,0.3)",
+              }}>
+                Get Started
+              </Link>
+            </>
+          ) : null
         ) : (
           // ── Authenticated: sidebar handles nav; show only top-bar extras ─
           <>
@@ -250,8 +282,22 @@ export default function NavBar() {
           display: none;
         }
 
+        /* Inline group for the three marketing section links on the landing
+           page. Collapses on narrow viewports — the sign-in / sign-up CTAs
+           stay visible, the anchors disappear (users can still reach those
+           sections by scrolling). */
+        .marketing-links {
+          display: inline-flex;
+          gap: 1.25rem;
+          align-items: center;
+          margin-right: 0.5rem;
+        }
+
         @media (max-width: 900px) {
           .desktop-nav { display: none !important; }
+        }
+        @media (max-width: 720px) {
+          .marketing-links { display: none !important; }
         }
         @media (max-width: 500px) {
           .nav-btn-text { display: none; }

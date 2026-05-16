@@ -12,6 +12,7 @@ import PriceToggle from "@/components/PriceToggle";
 import RichComposer, { Attachment } from "@/components/RichComposer";
 import Swal from "sweetalert2";
 import { useAuth } from "@/context/AuthContext";
+import { useVisitorLocale, convertMinorClient } from "@/lib/locale-client";
 
 // ── helpers ─────────────────────────────────────────────────────────────────
 const URL_RE = /(https?:\/\/[^\s<>"']+)/g;
@@ -124,32 +125,16 @@ export default function CreatorProfilePage({ params }: { params: Promise<{ usern
   const [submitting,  setSubmitting]  = useState(false);
   const [submitted,   setSubmitted]   = useState(false);
 
-  // Visitor country detection — used to show a one-line warning to Indian
-  // fans when the creator is priced in USD/etc. (Razorpay can't process
-  // those currencies, so the fan goes through Stripe and may hit RBI
-  // e-mandate / international-card-disabled issues). Cached per-creator
-  // dismissal lives in localStorage so it doesn't nag on every visit.
-  const [visitorCountry,   setVisitorCountry]   = useState<string | null>(null);
-  const [crossBorderDismissed, setCrossBorderDismissed] = useState(false);
+  // Visitor locale — drives both gateway routing (Indian fans → Razorpay)
+  // and the displayed currency (INR for Indian fans, USD for everyone
+  // else). Includes a cached FX rate sheet so we can convert creator
+  // prices to fan currency without an extra round-trip. Append
+  // ?country=XX to force in local dev.
+  const locale = useVisitorLocale();
+  const visitorCountry = locale.country;
 
   const { user, userProfile } = useAuth();
   const router = useRouter();
-
-  useEffect(() => {
-    let cancelled = false;
-    // Local dev / QA: append ?country=IN to the URL to force-render the
-    // cross-border banner without an actual IP from India. Skipped in
-    // prod traffic since regular fans don't append that param.
-    const forced = typeof window !== "undefined"
-      ? new URLSearchParams(window.location.search).get("country")
-      : null;
-    const url = forced ? `/api/geo?force=${encodeURIComponent(forced)}` : "/api/geo";
-    fetch(url)
-      .then(r => r.ok ? r.json() : null)
-      .then(d => { if (!cancelled && d?.country) setVisitorCountry(d.country); })
-      .catch(() => { /* dev / offline — banner just won't render */ });
-    return () => { cancelled = true; };
-  }, []);
 
   // Pre-fill user info if logged in
   useEffect(() => {
@@ -392,9 +377,11 @@ export default function CreatorProfilePage({ params }: { params: Promise<{ usern
     }
     setSubmitting(true);
     try {
-      // Gateway routing: INR-priced creators → Razorpay (modal), everyone
-      // else → Stripe (redirect). See lib/razorpay-client.ts for modal API.
-      const useRazorpay = ((display as any)?.currency || "usd").toLowerCase() === "inr";
+      // Gateway routing: fans paying from India go through Razorpay (which
+      // only collects INR — the API converts the creator's price to INR
+      // when needed). Everyone else pays via Stripe in the creator's
+      // currency. Country detection lives in /api/geo (visitorCountry).
+      const useRazorpay = visitorCountry === "IN";
       const endpoint = useRazorpay ? "/api/razorpay/checkout" : "/api/stripe/checkout";
       const res = await fetch(endpoint, {
         method: "POST",
@@ -580,9 +567,10 @@ export default function CreatorProfilePage({ params }: { params: Promise<{ usern
         }
       }
 
-      // Gateway routing: INR-priced creators → Razorpay (modal), everyone
-      // else → Stripe (redirect). Same branch as the subscribe button above.
-      const useRazorpay = ((display as any)?.currency || "usd").toLowerCase() === "inr";
+      // Gateway routing: fan-country-based (see subscribe handler above).
+      // Indian fans → Razorpay in INR (converted server-side if the creator
+      // priced in USD/GBP/etc); everyone else → Stripe in creator currency.
+      const useRazorpay = visitorCountry === "IN";
       const endpoint = useRazorpay ? "/api/razorpay/checkout" : "/api/stripe/checkout";
       const res = await fetch(endpoint, {
         method: "POST",
@@ -660,7 +648,26 @@ export default function CreatorProfilePage({ params }: { params: Promise<{ usern
 
   // ── derived values ───────────────────────────────────────────────────────
   const slaLabel  = formatResponseTime(display?.responseTimeHours || 72);
-  const currencySymbol = CURRENCY_SYMBOLS[(display?.currency || "usd").toLowerCase()] || "$";
+
+  // Convert the creator's stored price (e.g. USD cents, INR paise) to the
+  // visitor's display currency. Falls back to the source price when the
+  // FX sheet hasn't loaded yet — so SSR / first paint shows the creator
+  // currency for ~100ms, then re-renders in the fan's once /api/locale
+  // resolves. Indian fans pay INR via Razorpay; everyone else pays in
+  // the creator's currency via Stripe (fan bank does the FX) but we
+  // still display in USD as a familiar reference.
+  const creatorCcy = (display?.currency || "usd").toLowerCase();
+  const fanCcy = locale.currency;
+  const fanCurrencySymbol = CURRENCY_SYMBOLS[fanCcy] || "$";
+  const currencySymbol = fanCurrencySymbol; // legacy name used below
+  const toFan = (amountMinor: number | null | undefined): number => {
+    const v = Number(amountMinor ?? 0);
+    if (creatorCcy === fanCcy) return v;
+    const converted = convertMinorClient(v, creatorCcy, fanCcy, locale.rates);
+    return converted || v; // fall back to source if rate sheet missing
+  };
+  const fanPerQuestion = toFan(display?.perQuestionPrice);
+  const fanMonthly     = toFan(display?.monthlyPrice);
   const socialLinks: SocialLink[] = Array.isArray((display as any)?.socialLinks)
     ? (display as any).socialLinks
     : [];
@@ -1007,72 +1014,6 @@ export default function CreatorProfilePage({ params }: { params: Promise<{ usern
         </div>
       )}
 
-      {/* ── Cross-border warning banner ─────────────────────────
-          Indian fans on a non-INR creator profile get a heads-up that
-          Razorpay isn't available for this charge and their bank may
-          decline international transactions. The banner dismisses
-          per-creator in localStorage so it doesn't nag on every visit. */}
-      {visitorCountry === "IN"
-        && display
-        && ((display as any).currency || "usd").toLowerCase() !== "inr"
-        && !crossBorderDismissed
-        && (() => {
-          // Lazy-read localStorage so SSR doesn't blow up. Once we know the
-          // creator + visitor combo, check whether the fan has dismissed
-          // this banner for THIS creator before.
-          if (typeof window !== "undefined") {
-            const key = `xborder-dismissed-${display.uid}`;
-            try {
-              if (localStorage.getItem(key) === "1") {
-                // setState during render is a no-no, so defer.
-                queueMicrotask(() => setCrossBorderDismissed(true));
-                return null;
-              }
-            } catch { /* localStorage disabled — show banner */ }
-          }
-          const currencyLabel = ((display as any).currency || "USD").toUpperCase();
-          return (
-            <div style={{
-              maxWidth: 720, margin: "0 auto 18px",
-              padding: "14px 18px",
-              background: "linear-gradient(135deg, #fef3c7, #fffbeb)",
-              border: "2px solid #fbbf24",
-              borderRadius: 14,
-              display: "flex", gap: 12, alignItems: "flex-start",
-            }}>
-              <span style={{ fontSize: "1.3rem", flexShrink: 0 }}>🇮🇳</span>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontFamily: "var(--font-main)", fontWeight: 800, color: "#92400e", fontSize: "0.92rem", marginBottom: 4 }}>
-                  Paying from India? Heads-up
-                </div>
-                <div style={{ color: "#78350f", fontSize: "0.83rem", lineHeight: 1.5 }}>
-                  This creator charges in <strong>{currencyLabel}</strong>, so checkout
-                  is processed as an international transaction. Most Indian banks
-                  block international card payments by default — enable them in your
-                  bank app first. Monthly subscriptions on Indian cards may also be
-                  declined due to RBI mandate rules; one-time questions usually work fine.
-                </div>
-              </div>
-              <button
-                onClick={() => {
-                  setCrossBorderDismissed(true);
-                  try {
-                    if (typeof window !== "undefined" && display) {
-                      localStorage.setItem(`xborder-dismissed-${display.uid}`, "1");
-                    }
-                  } catch { /* ignore */ }
-                }}
-                aria-label="Dismiss"
-                style={{
-                  background: "none", border: "none", color: "#92400e",
-                  fontSize: "1.1rem", cursor: "pointer", fontWeight: 800,
-                  padding: "0 4px", flexShrink: 0, lineHeight: 1,
-                }}
-              >✕</button>
-            </div>
-          );
-        })()}
-
       {/* ══════════════════════════════════════════════════════ */}
       {/* SECTION 4 — PRICING                                   */}
       {/* ══════════════════════════════════════════════════════ */}
@@ -1120,7 +1061,7 @@ export default function CreatorProfilePage({ params }: { params: Promise<{ usern
               Single Question
             </p>
             <p style={{ fontSize: "2rem", fontWeight: 900, color: "var(--green)", margin: 0, lineHeight: 1 }}>
-              {currencySymbol}{((display.perQuestionPrice || 0) / 100).toFixed(2)}
+              {currencySymbol}{(fanPerQuestion / 100).toFixed(2)}
             </p>
             <p style={{ color: "var(--muted)", fontSize: "0.75rem", margin: "4px 0 0" }}>
               one-time
@@ -1165,7 +1106,7 @@ export default function CreatorProfilePage({ params }: { params: Promise<{ usern
               Monthly Subscriber
             </p>
             <p style={{ fontSize: "2rem", fontWeight: 900, color: "var(--purple)", margin: 0, lineHeight: 1 }}>
-              {isSubscribed ? "Active" : `${currencySymbol}${((display.monthlyPrice || 0) / 100).toFixed(2)}`}
+              {isSubscribed ? "Active" : `${currencySymbol}${(fanMonthly / 100).toFixed(2)}`}
             </p>
             <p style={{ color: "var(--muted)", fontSize: "0.75rem", margin: "4px 0 0" }}>
               {isSubscribed ? "You are a member!" : (
@@ -1234,7 +1175,7 @@ export default function CreatorProfilePage({ params }: { params: Promise<{ usern
                 ? "🏖️ On vacation — subscriptions paused"
                 : !user
                 ? "Sign Up & Subscribe →"
-                : `Subscribe ${currencySymbol}${((display.monthlyPrice || 0) / 100).toFixed(2)}/mo →`}
+                : `Subscribe ${currencySymbol}${(fanMonthly / 100).toFixed(2)}/mo →`}
             </button>
           </div>
         )}
@@ -1279,7 +1220,7 @@ export default function CreatorProfilePage({ params }: { params: Promise<{ usern
             >
               {!user
                 ? "Sign Up & Subscribe →"
-                : `Subscribe & Ask ${currencySymbol}${((display.monthlyPrice || 0) / 100).toFixed(2)}/mo →`}
+                : `Subscribe & Ask ${currencySymbol}${(fanMonthly / 100).toFixed(2)}/mo →`}
             </button>
           </div>
         ) : (<>
@@ -1372,7 +1313,7 @@ export default function CreatorProfilePage({ params }: { params: Promise<{ usern
                 <span style={{ color: "var(--purple)", fontWeight: 900, fontSize: "1.15rem" }}>
                   {isSubscribed && payMode === "monthly" ? "FREE" : (
                     <>
-                      {currencySymbol}{((payMode === "one-time" ? (display.perQuestionPrice || 0) : (display.monthlyPrice || 0)) / 100).toFixed(2)}
+                      {currencySymbol}{((payMode === "one-time" ? fanPerQuestion : fanMonthly) / 100).toFixed(2)}
                       {payMode === "monthly" && <span style={{ fontSize: "0.75rem", fontWeight: 600 }}>/mo</span>}
                     </>
                   )}
@@ -1408,9 +1349,9 @@ export default function CreatorProfilePage({ params }: { params: Promise<{ usern
               ) : isSubscribed && payMode === "monthly" ? (
                 "Send Question (Subscriber Perk) 🌟"
               ) : payMode === "one-time" ? (
-                `Pay & Ask 💬 ${currencySymbol}${((display.perQuestionPrice || 0) / 100).toFixed(2)}`
+                `Pay & Ask 💬 ${currencySymbol}${(fanPerQuestion / 100).toFixed(2)}`
               ) : (
-                `Subscribe & Ask 🌟 ${currencySymbol}${((display.monthlyPrice || 0) / 100).toFixed(2)}/mo`
+                `Subscribe & Ask 🌟 ${currencySymbol}${(fanMonthly / 100).toFixed(2)}/mo`
               )}
             </button>
 

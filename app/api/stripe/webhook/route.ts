@@ -63,7 +63,19 @@ export async function POST(req: NextRequest) {
         const {
           creatorId, creatorName, followerEmail, followerName,
           followerUid, pricePaid, currency,
+          originalAmount, originalCurrency,
+          creatorAmount, creatorCurrency, fxRate,
         } = meta as Record<string, string>;
+
+        // FX snapshot. Stripe always collects in creator currency, so the
+        // original/creator pairs collapse and fxRate=1 — but we still
+        // stamp the fields so downstream code can read uniformly across
+        // gateways.
+        const creatorCcy = (creatorCurrency || currency || "usd").toLowerCase();
+        const creatorAmt = parseInt(creatorAmount ?? pricePaid);
+        const originalAmt = parseInt(originalAmount ?? pricePaid);
+        const originalCcy = (originalCurrency || currency || "usd").toLowerCase();
+        const capturedFxRate = parseFloat(fxRate ?? "1");
 
         const creatorSnap = await adminDb.collection("users").doc(creatorId).get();
         const creatorData = creatorSnap.data() ?? {};
@@ -93,14 +105,20 @@ export async function POST(req: NextRequest) {
           followerEmail,
           followerName: followerName || null,
           status: "active",
-          pricePerMonth: parseInt(pricePaid),
-          currency: currency ?? "usd",
+          pricePerMonth: creatorAmt,
+          currency: creatorCcy,
           stripeCustomerId,
           stripeSubscriptionId,
           stripeSessionId: session.id,
           createdAt: FieldValue.serverTimestamp(),
           updatedAt: FieldValue.serverTimestamp(),
           cancelledAt: null,
+          originalAmount:   originalAmt,
+          originalCurrency: originalCcy,
+          creatorAmount:    creatorAmt,
+          creatorCurrency:  creatorCcy,
+          fxRate:           capturedFxRate,
+          fxCapturedAt:     FieldValue.serverTimestamp(),
         });
 
         // Persist the Stripe customer on the fan's user doc so the billing
@@ -152,7 +170,13 @@ export async function POST(req: NextRequest) {
             amount: creatorNetCents,
             platformFeeAmount: feeCents,
             totalPaid: grossCents,
-            currency: currency ?? "usd",
+            currency: creatorCcy,
+            originalAmount:   originalAmt,
+            originalCurrency: originalCcy,
+            creatorAmount:    grossCents,
+            creatorCurrency:  creatorCcy,
+            fxRate:           capturedFxRate,
+            fxCapturedAt:     FieldValue.serverTimestamp(),
             paymentType: "subscription",
             stripeSubscriptionId,
             stripeSessionId: session.id,
@@ -230,7 +254,16 @@ export async function POST(req: NextRequest) {
         followerUid,
         content, pricePaid, expiresAt,
         payoutMethod, platformPlan, feePercent, creatorCut, currency,
+        originalAmount, originalCurrency,
+        creatorAmount, creatorCurrency, fxRate,
       } = meta as Record<string, string>;
+
+      // FX snapshot (Stripe path always collapses: original==creator, rate=1).
+      const creatorCcy = (creatorCurrency || currency || "usd").toLowerCase();
+      const creatorAmt = parseInt(creatorAmount ?? pricePaid);
+      const originalAmt = parseInt(originalAmount ?? pricePaid);
+      const originalCcy = (originalCurrency || currency || "usd").toLowerCase();
+      const capturedFxRate = parseFloat(fxRate ?? "1");
 
       console.log(`📝 Creating question ${questionId} for creator ${creatorId}...`);
 
@@ -275,7 +308,7 @@ export async function POST(req: NextRequest) {
         content,
         response:              null,
         status:                "PENDING",
-        pricePaid:             parseInt(pricePaid),
+        pricePaid:             creatorAmt,
         followerEmail,
         followerName,
         // The fan's uid so the fan's /fan-dashboard "My Questions" tab
@@ -297,6 +330,12 @@ export async function POST(req: NextRequest) {
         notificationsSent:     false,
         isVacationConversion,
         attachmentUrls,
+        originalAmount:        originalAmt,
+        originalCurrency:      originalCcy,
+        creatorAmount:         creatorAmt,
+        creatorCurrency:       creatorCcy,
+        fxRate:                capturedFxRate,
+        fxCapturedAt:          FieldValue.serverTimestamp(),
       });
 
       // ── Increment creator earnings counters ───────────────────────────────
@@ -342,7 +381,13 @@ export async function POST(req: NextRequest) {
           amount:            creatorNetCents,
           platformFeeAmount: feeCents,
           totalPaid:         grossCents,
-          currency:          currency ?? "usd",
+          currency:          creatorCcy,
+          originalAmount:    originalAmt,
+          originalCurrency:  originalCcy,
+          creatorAmount:     grossCents,
+          creatorCurrency:   creatorCcy,
+          fxRate:            capturedFxRate,
+          fxCapturedAt:      FieldValue.serverTimestamp(),
           questionId,
           paymentType:       "per_question",
           status:            "pending",

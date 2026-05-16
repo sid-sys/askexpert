@@ -120,12 +120,27 @@ export interface FirestoreUser {
   vacationMessage?: string;
 }
 
-export interface FirestoreQuestion {
+// Cross-currency snapshot written onto every paid record (question / sub /
+// payout). When a fan in India pays a US creator, originalAmount is the
+// INR paise charged via Razorpay, and creatorAmount is the USD cents the
+// creator sees in their dashboard — converted at fxRate, captured at
+// fxCapturedAt. Records without these fields predate the FX rollout; the
+// dashboard treats them as already-in-creator-currency.
+export interface FxSnapshot {
+  originalAmount?:   number;  // minor units actually charged to the fan
+  originalCurrency?: string;  // lowercase ISO — e.g. "inr"
+  creatorAmount?:    number;  // minor units in creator's currency
+  creatorCurrency?:  string;  // lowercase ISO — e.g. "usd"
+  fxRate?:           number;  // multiplier original→creator at capture time
+  fxCapturedAt?:     Date;
+}
+
+export interface FirestoreQuestion extends FxSnapshot {
   id?: string;
   content: string;
   response: string | null;
   status: QuestionStatus;
-  pricePaid: number; // in cents
+  pricePaid: number; // in cents — legacy: equals creatorAmount for new records
   followerEmail: string;
   followerName: string;
   creatorId: string;
@@ -156,7 +171,7 @@ export interface FirestoreReview {
   createdAt: Date;
 }
 
-export interface FirestoreSubscription {
+export interface FirestoreSubscription extends FxSnapshot {
   id?: string;
   creatorId: string;
   followerId: string;
@@ -171,13 +186,15 @@ export interface FirestoreSubscription {
 }
 
 // ── Manual payout record (created for every payment to a non-Connect creator) ──
-export interface FirestorePayout {
+export interface FirestorePayout extends FxSnapshot {
   id?: string;
   creatorId: string;
   creatorName: string;
   creatorEmail?: string;
   // Amounts are in the currency's minor unit: cents for usd/eur/gbp,
-  // paise for inr. Same x100 convention either way.
+  // paise for inr. Same x100 convention either way. For cross-currency
+  // payments these mirror the creator-side (FxSnapshot.creatorAmount /
+  // creatorCurrency); the gateway side lives in originalAmount/Currency.
   amount: number;             // creator's cut after platform fee
   platformFeeAmount: number;  // platform fee
   totalPaid: number;          // gross amount paid

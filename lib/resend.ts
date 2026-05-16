@@ -76,6 +76,7 @@ export async function sendNewQuestionEmail({
   askerEmail,
   askerName,
   price,
+  currency = "usd",
   category,
   requestedReplyFormat,
   dashboardUrl,
@@ -88,12 +89,17 @@ export async function sendNewQuestionEmail({
   askerEmail: string;
   askerName?: string;
   price: number;
+  currency?: string;
   category?: string;
   requestedReplyFormat?: string;
   dashboardUrl?: string;
   responseTimeHours?: number;
   attachmentUrls?: string[];
 }) {
+  const priceFormatted = new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: currency.toUpperCase(),
+  }).format(price / 100);
   const askerLabel = askerName?.trim() || maskEmail(askerEmail);
   try {
     const replyTag = requestedReplyFormat && requestedReplyFormat !== "text"
@@ -137,7 +143,7 @@ export async function sendNewQuestionEmail({
         </div>
         <div style="text-align:right;">
           <div style="font-size:0.75rem;color:#9ca3af;font-weight:600;text-transform:uppercase;margin-bottom:4px;">Paid</div>
-          <div style="font-size:1.2rem;color:#7c3aed;font-weight:900;">$${(price / 100).toFixed(2)}</div>
+          <div style="font-size:1.2rem;color:#7c3aed;font-weight:900;">${priceFormatted}</div>
         </div>
       </div>
 
@@ -151,7 +157,7 @@ export async function sendNewQuestionEmail({
     const res = await resend.emails.send({
       from: FROM,
       to,
-      subject: `💬 New question from ${askerLabel} — $${(price / 100).toFixed(2)} earned`,
+      subject: `💬 New question from ${askerLabel} — ${priceFormatted} earned`,
       html: emailWrapper(content),
     });
 

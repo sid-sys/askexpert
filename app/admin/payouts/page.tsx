@@ -9,23 +9,25 @@ import Swal from "sweetalert2";
 import { useAuth } from "@/context/AuthContext";
 import { collection, query, where, orderBy, limit, onSnapshot } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import { formatMoney } from "@/lib/money";
 
 // Types derived from expected fields
 interface Payout {
   id: string;
   creatorId: string;
   creatorEmail: string;
-  amount: number; // in cents
+  amount: number;            // minor units (cents OR paise)
+  currency?: string;         // "usd" | "inr" | ... — written by webhooks
+  // FX snapshot (only set on cross-currency payouts, where the fan paid in
+  // a different currency than the creator earns in).
+  originalAmount?: number;
+  originalCurrency?: string;
   createdAt: any;
   status: "pending" | "paid" | "cancelled";
   paymentMethod?: string;
   bankDetails?: string;
   reference?: string;
   adminNotes?: string;
-}
-
-function fmt$( cents: number ) {
-  return "$" + (cents / 100).toFixed(2);
 }
 
 function timeFmt( ts: any ): string {
@@ -220,6 +222,22 @@ export default function AdminPayoutsPage() {
 
   const filtered = filter === "all" ? payouts : payouts.filter(p => p.status === filter);
 
+  // Group pending obligations by currency so admin can see at a glance
+  // which bank to pay from. INR creators ↔ Indian bank; USD/GBP/EUR ↔
+  // UK bank (you take USD into the UK account). Anything else falls into
+  // its own row so it doesn't get silently lumped in.
+  const pendingByCurrency = payouts
+    .filter(p => p.status === "pending")
+    .reduce<Record<string, { total: number; count: number }>>((acc, p) => {
+      const c = (p.currency ?? "usd").toLowerCase();
+      acc[c] ??= { total: 0, count: 0 };
+      acc[c].total += p.amount;
+      acc[c].count += 1;
+      return acc;
+    }, {});
+  const bankForCurrency = (c: string): string =>
+    c === "inr" ? "🇮🇳 India bank" : "🇬🇧 UK bank (USD)";
+
   return (
     <div style={{ minHeight: "100vh", background: "#f8f7ff", fontFamily: "'Inter', sans-serif" }}>
       {/* ── TOP BAR ── */}
@@ -264,6 +282,34 @@ export default function AdminPayoutsPage() {
 
       <div style={{ maxWidth: 1100, margin: "0 auto", padding: "36px 5% 80px" }}>
         
+        {/* Pending-by-currency strip — tells you which bank to pay from. */}
+        {Object.keys(pendingByCurrency).length > 0 && (
+          <div style={{
+            display: "flex", flexWrap: "wrap", gap: 12, marginBottom: 24,
+          }}>
+            {Object.entries(pendingByCurrency).map(([ccy, agg]) => (
+              <div key={ccy} style={{
+                flex: "1 1 220px",
+                background: "#fff",
+                border: "2.5px solid #000",
+                borderRadius: 14,
+                boxShadow: "4px 4px 0 #000",
+                padding: "14px 18px",
+              }}>
+                <div style={{ fontSize: "0.72rem", fontWeight: 700, color: "#6b7280", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+                  {bankForCurrency(ccy)} · {ccy.toUpperCase()}
+                </div>
+                <div style={{ fontSize: "1.6rem", fontWeight: 900, color: "#10b981", marginTop: 4 }}>
+                  {formatMoney(agg.total, ccy)}
+                </div>
+                <div style={{ fontSize: "0.78rem", color: "#9ca3af" }}>
+                  {agg.count} pending payout{agg.count === 1 ? "" : "s"}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", flexWrap: "wrap", gap: 16, marginBottom: 24 }}>
           <div>
             <h1 style={{ fontFamily: "'Outfit', sans-serif", fontSize: "2rem", fontWeight: 900, color: "#1f2937", margin: "0 0 4px" }}>
@@ -334,7 +380,14 @@ export default function AdminPayoutsPage() {
                           <span style={{ fontWeight: 600, color: "#1f2937", display: 'block' }}>{p.creatorEmail}</span>
                           <span style={{ fontSize: "0.75rem", color: "#9ca3af" }}>{p.creatorId}</span>
                         </td>
-                        <td style={{ padding: "16px", fontSize: "0.95rem", fontWeight: 800, color: "#10b981" }}>{fmt$(p.amount)}</td>
+                        <td style={{ padding: "16px", fontSize: "0.95rem", fontWeight: 800, color: "#10b981" }}>
+                          {formatMoney(p.amount, p.currency)}
+                          {p.originalCurrency && p.originalCurrency !== (p.currency ?? "").toLowerCase() && (
+                            <div style={{ fontSize: "0.7rem", fontWeight: 500, color: "#9ca3af", marginTop: 2 }}>
+                              fan paid {formatMoney(p.originalAmount ?? 0, p.originalCurrency)}
+                            </div>
+                          )}
+                        </td>
                         <td style={{ padding: "16px", fontSize: "0.85rem", color: "#4b5563" }}>
                            {p.paymentMethod} {maskBank(p.bankDetails)}
                         </td>

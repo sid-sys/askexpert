@@ -65,6 +65,16 @@ export async function POST(req: NextRequest) {
       currency,
       originalPrice: price.toString(),
       responseTimeHours: responseTimeHours.toString(),
+      // FX snapshot — Stripe always charges in creator's currency, so the
+      // original/creator amounts collapse and fxRate=1. Kept in lockstep
+      // with the Razorpay path so the webhook can read both gateways
+      // through one code path. (When fans abroad pay via Stripe, their
+      // bank handles the card-side FX; we never see two currencies here.)
+      originalAmount:   finalPrice.toString(),
+      originalCurrency: currency,
+      creatorAmount:    finalPrice.toString(),
+      creatorCurrency:  currency,
+      fxRate:           "1",
     };
 
     // Safely add up to 5 attachment URLs to metadata (Stripe has a 50 key limit, 500 chars per value)
