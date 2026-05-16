@@ -28,7 +28,7 @@ const sections = [
 • You must answer questions within a reasonable timeframe or issue a refund.
 • You may not impersonate professionals (e.g., claim to be a licensed lawyer or doctor) when you are not.
 • AskExpert takes a platform fee of up to 20% from each transaction (lower on paid plans — see Pricing).
-• Payouts are processed via Stripe Connect and subject to Stripe's terms.`,
+• Payouts are processed via our payment provider and subject to their terms.`,
   },
   {
     title: "4. Question Askers",
@@ -41,12 +41,12 @@ const sections = [
   },
   {
     title: "5. Payments and Fees",
-    content: `All payments are processed by Stripe, Inc. By using payment features, you agree to Stripe's Terms of Service.
+    content: `All payments are processed by PCI-DSS Level 1 certified third-party payment providers. By using payment features, you agree to the applicable payment provider's terms of service.
 
 • AskExpert charges a platform fee of **20% on the Free plan**, **10% on Creator**, and **0% on Pro**, applied to both one-time question payments and monthly fan subscriptions.
-• Experts receive the remainder of each payment (e.g. **80%** on Free, **90%** on Creator, **100%** on Pro), minus Stripe processing fees (~2.9% + 30¢).
-• Payouts are transferred to your connected Stripe account.
-• Prices are set in GBP by default but may vary by region.
+• Experts receive the remainder of each payment (e.g. **80%** on Free, **90%** on Creator, **100%** on Pro), minus standard payment processing fees (typically ~2-3% per transaction).
+• Payouts are transferred to your connected payout account (bank, PayPal, Wise, or auto-payouts where supported).
+• Prices are set by each creator in their local currency.
 • All prices include applicable taxes where required by law.`,
   },
   {

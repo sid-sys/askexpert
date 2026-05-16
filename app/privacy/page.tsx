@@ -12,7 +12,7 @@ const sections = [
     content: `We collect information you provide directly to us:
 
 • **Account Information:** Name, email address, and profile details when you register.
-• **Payment Information:** Stripe processes all payments. We store only the last 4 digits of cards and transaction records. We never see or store your full card details.
+• **Payment Information:** Payments are processed by PCI-DSS compliant third-party payment providers. We store only the last 4 digits of cards and transaction records. We never see or store your full card details.
 • **Questions & Answers:** Content you submit on the platform, including questions asked and answers provided.
 • **Usage Data:** Pages visited, features used, and time spent on the platform to improve our service.
 • **Device Information:** Browser type, operating system, and IP address for security purposes.`,
@@ -54,7 +54,7 @@ To exercise any of these rights, contact us at contact@askexpert.ink.`,
   },
   {
     title: "7. Security",
-    content: `We implement industry-standard security measures including HTTPS encryption, secure Firebase authentication, Stripe's PCI-compliant payment processing, and regular security reviews. However, no method of transmission over the internet is 100% secure.`,
+    content: `We implement industry-standard security measures including HTTPS encryption, secure authentication, PCI-compliant payment processing, and regular security reviews. However, no method of transmission over the internet is 100% secure.`,
   },
   {
     title: "8. Children's Privacy",

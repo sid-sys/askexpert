@@ -1065,10 +1065,10 @@ export default function CreatorProfilePage({ params }: { params: Promise<{ usern
                 </div>
                 <div style={{ color: "#78350f", fontSize: "0.83rem", lineHeight: 1.5 }}>
                   This creator charges in <strong>{currencyLabel}</strong>, so checkout
-                  goes through Stripe. Most Indian banks block international card
-                  transactions by default — enable them in your bank app first.
-                  Monthly subscriptions on Indian cards may also be declined due to
-                  RBI mandate rules; one-time questions usually work fine.
+                  is processed as an international transaction. Most Indian banks
+                  block international card payments by default — enable them in your
+                  bank app first. Monthly subscriptions on Indian cards may also be
+                  declined due to RBI mandate rules; one-time questions usually work fine.
                 </div>
               </div>
               <button
@@ -1393,7 +1393,7 @@ export default function CreatorProfilePage({ params }: { params: Promise<{ usern
                   inputMode="numeric"
                 />
                 <p style={{ color: "var(--muted)", fontSize: "0.72rem", marginTop: 4 }}>
-                  Optional — speeds up checkout. Required by Razorpay for UPI.
+                  Optional — speeds up checkout. Required for UPI payments.
                 </p>
               </div>
             )}
@@ -1455,7 +1455,7 @@ export default function CreatorProfilePage({ params }: { params: Promise<{ usern
             </button>
 
             <p style={{ color: "var(--muted)", fontSize: "0.74rem", textAlign: "center", margin: 0 }}>
-              Auto-refunded if not answered within {slaLabel}. Powered by {((display as any)?.currency || "").toLowerCase() === "inr" ? "Razorpay" : "Stripe"}. 🔒
+              Auto-refunded if not answered within {slaLabel}. Secure checkout. 🔒
             </p>
           </form>
         )}

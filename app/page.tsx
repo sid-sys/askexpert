@@ -72,7 +72,7 @@ const FAQS = [
   },
   {
     q: "When do creators get paid?",
-    a: "Earnings accrue in your account the moment a fan pays. Withdraw any time after crossing the payout threshold ($50 / ₹1,000) via your bank, PayPal, Wise, or Stripe Connect.",
+    a: "Earnings accrue in your account the moment a fan pays. Withdraw any time after crossing the payout threshold ($50 / ₹1,000) via your bank, PayPal, or Wise.",
   },
   {
     q: "What if the expert doesn't answer?",
@@ -84,11 +84,11 @@ const FAQS = [
   },
   {
     q: "Does this work in India?",
-    a: "Yes. Indian creators charge in ₹ via Razorpay (UPI, cards, netbanking). International creators charge in $/€/£ via Stripe. The right gateway shows up based on the creator's currency.",
+    a: "Yes. Indian creators charge in ₹ — fans pay via UPI, cards, or netbanking. International creators charge in $/€/£. The right local payment methods show up automatically based on the creator's currency.",
   },
   {
     q: "Is my payment information safe?",
-    a: "We never see or store your card. All payments go through Stripe and Razorpay — both PCI-DSS Level 1 certified.",
+    a: "We never see or store your card. All payments are handled by PCI-DSS Level 1 certified payment processors — your card details stay encrypted end-to-end.",
   },
 ];
 
