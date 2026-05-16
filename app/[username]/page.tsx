@@ -1180,7 +1180,7 @@ export default function CreatorProfilePage({ params }: { params: Promise<{ usern
               }}>SELECTED</span>
             )}
             <p style={{ color: "var(--muted)", fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", margin: "0 0 6px" }}>
-              Monthly Subscriber
+              Community Member
             </p>
             <p style={{ fontSize: "2rem", fontWeight: 900, color: "var(--purple)", margin: 0, lineHeight: 1 }}>
               {isSubscribed ? "Active" : `${currencySymbol}${((display.monthlyPrice || 0) / 100).toFixed(2)}`}
@@ -1251,8 +1251,8 @@ export default function CreatorProfilePage({ params }: { params: Promise<{ usern
                 : display.vacationMode
                 ? "🏖️ On vacation — subscriptions paused"
                 : !user
-                ? "Sign Up & Subscribe →"
-                : `Subscribe ${currencySymbol}${((display.monthlyPrice || 0) / 100).toFixed(2)}/mo →`}
+                ? "Sign Up & Join Community →"
+                : `Join Community · ${currencySymbol}${((display.monthlyPrice || 0) / 100).toFixed(2)}/mo →`}
             </button>
           </div>
         )}
@@ -1279,7 +1279,7 @@ export default function CreatorProfilePage({ params }: { params: Promise<{ usern
           <div style={{ textAlign: "center", padding: "32px 16px" }}>
             <div style={{ fontSize: "3rem", marginBottom: 16 }}>🌟</div>
             <h3 style={{ fontWeight: 800, fontSize: "1.25rem", color: "#1f2937", margin: "0 0 8px" }}>
-              Subscribe to ask questions
+              Join the community to ask questions
             </h3>
             <p style={{ color: "#6b7280", fontSize: "0.9rem", lineHeight: 1.65, maxWidth: 340, margin: "0 auto 24px" }}>
               Get personal answers from <strong>{display.displayName}</strong> — subscribe monthly to unlock unlimited questions.
@@ -1296,8 +1296,8 @@ export default function CreatorProfilePage({ params }: { params: Promise<{ usern
               }}
             >
               {!user
-                ? "Sign Up & Subscribe →"
-                : `Subscribe & Ask ${currencySymbol}${((display.monthlyPrice || 0) / 100).toFixed(2)}/mo →`}
+                ? "Sign Up & Join Community →"
+                : `Join Community & Ask · ${currencySymbol}${((display.monthlyPrice || 0) / 100).toFixed(2)}/mo →`}
             </button>
           </div>
         ) : (<>
@@ -1446,11 +1446,11 @@ export default function CreatorProfilePage({ params }: { params: Promise<{ usern
               ) : submitting ? (
                 "Redirecting to payment…"
               ) : isSubscribed && payMode === "monthly" ? (
-                "Send Question (Subscriber Perk) 🌟"
+                "Send Question (Community Perk) 🌟"
               ) : payMode === "one-time" ? (
                 `Pay & Ask 💬 ${currencySymbol}${((display.perQuestionPrice || 0) / 100).toFixed(2)}`
               ) : (
-                `Subscribe & Ask 🌟 ${currencySymbol}${((display.monthlyPrice || 0) / 100).toFixed(2)}/mo`
+                `Join Community & Ask 🌟 ${currencySymbol}${((display.monthlyPrice || 0) / 100).toFixed(2)}/mo`
               )}
             </button>
 

@@ -39,7 +39,7 @@ const NAV: { id: NavId; label: string; icon: React.ReactElement }[] = [
     icon: <svg width="18" height="18" fill="none" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2"/><path d="M17 17l4 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>,
   },
   {
-    id: "subscriptions", label: "Subscriptions",
+    id: "subscriptions", label: "Communities",
     icon: <svg width="18" height="18" fill="none" viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" stroke="currentColor" strokeWidth="2" strokeLinejoin="round"/></svg>,
   },
   {
@@ -729,7 +729,7 @@ function FanDashboardContent() {
                     })()}
                     {subscriptions.length > 0 && (
                       <button onClick={() => go("subscriptions")} style={{ background: "none", border: "none", color: "#7c3aed", fontWeight: 700, fontSize: "0.82rem", cursor: "pointer", paddingTop: 12, fontFamily: "'Outfit',sans-serif" }}>
-                        Manage subscriptions →
+                        Manage communities →
                       </button>
                     )}
                   </>, { marginBottom: 0 })}
@@ -805,11 +805,11 @@ function FanDashboardContent() {
               return (
               <>
                 <div style={{ marginBottom: 24 }}>
-                  <h1 style={{ fontFamily: "'Outfit',sans-serif", fontWeight: 800, fontSize: "clamp(1.5rem,3vw,2rem)", color: "#111", margin: "0 0 4px" }}>My Subscriptions</h1>
+                  <h1 style={{ fontFamily: "'Outfit',sans-serif", fontWeight: 800, fontSize: "clamp(1.5rem,3vw,2rem)", color: "#111", margin: "0 0 4px" }}>My Communities</h1>
                   <p style={{ fontFamily: "'Outfit',sans-serif", color: "#888", fontSize: "0.9rem", margin: 0 }}>
-                    {loading ? "…" : `${activeSubs.length} active ${activeSubs.length === 1 ? "subscription" : "subscriptions"}`}
+                    {loading ? "…" : `${activeSubs.length} active ${activeSubs.length === 1 ? "community" : "communities"}`}
                     {!loading && inactiveSubs.length > 0 && (
-                      <span style={{ color: "#9ca3af" }}> · {inactiveSubs.length} cancelled / past</span>
+                      <span style={{ color: "#9ca3af" }}> · {inactiveSubs.length} past</span>
                     )}
                   </p>
                 </div>
@@ -1167,11 +1167,17 @@ function FanSubscriptionRow({
           <span style={{ background: "#dcfce7", color: "#166534", borderRadius: 99, padding: "2px 10px", fontSize: "0.68rem", fontWeight: 800, fontFamily: "'Outfit',sans-serif" }}>✓ Active</span>
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <a
+            href={`/community/${sub.creatorId}`}
+            style={{ display: "block", background: "linear-gradient(135deg,#7c3aed,#a855f7)", color: "#fff", padding: "8px 16px", borderRadius: 10, fontWeight: 700, fontSize: "0.8rem", fontFamily: "'Outfit',sans-serif", textAlign: "center", textDecoration: "none", whiteSpace: "nowrap" }}
+          >
+            🌐 Open Community
+          </a>
           <button
             onClick={onOpenChat}
-            style={{ position: "relative", background: "linear-gradient(135deg,#7c3aed,#a855f7)", color: "#fff", padding: "8px 16px", borderRadius: 10, fontWeight: 700, fontSize: "0.8rem", fontFamily: "'Outfit',sans-serif", textAlign: "center", border: "none", whiteSpace: "nowrap", cursor: "pointer" }}
+            style={{ position: "relative", background: "#fff", color: "#7c3aed", padding: "7px 16px", borderRadius: 10, fontWeight: 700, fontSize: "0.78rem", fontFamily: "'Outfit',sans-serif", textAlign: "center", border: "1.5px solid #ede9fe", whiteSpace: "nowrap", cursor: "pointer" }}
           >
-            💬 Open Chat
+            💬 1:1 Chat
             {unread > 0 && (
               <span style={{ position: "absolute", top: -6, right: -6, minWidth: 20, height: 20, padding: "0 6px", borderRadius: 99, background: "#ef4444", color: "#fff", fontSize: "0.7rem", fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 0 0 2px #fff" }}>
                 {unread > 9 ? "9+" : unread}

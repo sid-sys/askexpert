@@ -8,6 +8,7 @@ import {
   sendSubscriptionConfirmationEmail,
   sendNewSubscriberEmail,
 } from "@/lib/resend";
+import { ensureCommunityMembership, removeCommunityMembership } from "@/lib/stream";
 
 // POST /api/razorpay/webhook
 // Mirror of app/api/stripe/webhook/route.ts adapted for Razorpay events:
@@ -389,6 +390,22 @@ export async function POST(req: NextRequest) {
         { merge: true }
       );
 
+      // Add the fan to the creator's Stream Chat community channel.
+      // Non-fatal — fan can join lazily via /api/stream/ensure-channel
+      // when they open the community tab if this fails.
+      try {
+        if (followerUid) {
+          await ensureCommunityMembership({
+            creatorId,
+            creatorName:  creatorName || creatorData.displayName || "Creator",
+            creatorImage: creatorData.photoURL ?? null,
+            fanId:        followerUid,
+          });
+        }
+      } catch (e: any) {
+        console.error("[razorpay webhook] community membership failed:", e.message);
+      }
+
       await Promise.all([
         (async () => {
           try {
@@ -557,12 +574,24 @@ export async function POST(req: NextRequest) {
       .limit(1)
       .get();
     if (!fanSubSnap.empty) {
+      const fanSubData = fanSubSnap.docs[0].data();
       await fanSubSnap.docs[0].ref.update({
         status: "cancelled",
         cancelledAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
       });
       console.log(`⬇️  Razorpay fan sub ${sub.id} cancelled.`);
+      // Boot the fan from the creator's community channel. Non-fatal.
+      try {
+        if (fanSubData.followerId && fanSubData.creatorId) {
+          await removeCommunityMembership({
+            creatorId: fanSubData.creatorId,
+            fanId:     fanSubData.followerId,
+          });
+        }
+      } catch (e: any) {
+        console.error("[razorpay webhook] community remove failed:", e.message);
+      }
     }
   }
 
