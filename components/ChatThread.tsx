@@ -127,6 +127,12 @@ interface ChatThreadProps {
   // past_due — both fan and creator stop being able to send.
   disabled?: boolean;
   disabledReason?: string;
+  // Optional one-shot prefill of the "replying to" state. Used when the
+  // fan clicks Reply on a community post — the chat opens with the post
+  // quoted above the input bar. The id should be synthetic (e.g.
+  // "community:<postId>") so we don't try to thread against a chat
+  // message id that doesn't exist in this collection.
+  initialReplyingTo?: { id: string; snippet: string; senderRole: "creator" | "fan" };
 }
 
 function timeAgo(d: Date): string {
@@ -204,6 +210,7 @@ export default function ChatThread({
   flush = false,
   disabled = false,
   disabledReason,
+  initialReplyingTo,
 }: ChatThreadProps) {
   const { user } = useAuth();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -218,8 +225,18 @@ export default function ChatThread({
   const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([]);
   const [pendingVoice, setPendingVoice] = useState<{ blob: Blob; url: string; secs: number } | null>(null);
 
-  // Message being quoted in the next send (set by long-press on a bubble)
-  const [replyingTo, setReplyingTo] = useState<ChatReplyRef | null>(null);
+  // Message being quoted in the next send (set by long-press on a bubble,
+  // or pre-filled via the initialReplyingTo prop when the user landed
+  // here from a community-post "Reply" button).
+  const [replyingTo, setReplyingTo] = useState<ChatReplyRef | null>(initialReplyingTo ?? null);
+
+  // If a fresh initialReplyingTo arrives (e.g. another community-post
+  // reply within the same session) update once. We don't keep it in a
+  // dep array so a user manually closing the reply chip stays closed.
+  useEffect(() => {
+    if (initialReplyingTo) setReplyingTo(initialReplyingTo);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialReplyingTo?.id]);
 
   // Recording state
   const [recording, setRecording] = useState(false);

@@ -9,7 +9,6 @@ import {
   sendSubscriptionConfirmationEmail,
   sendNewSubscriberEmail,
 } from "@/lib/resend";
-import { ensureCommunityMembership, removeCommunityMembership } from "@/lib/stream";
 
 
 export async function POST(req: NextRequest) {
@@ -172,23 +171,6 @@ export async function POST(req: NextRequest) {
             },
             { merge: true }
           );
-        }
-
-        // Auto-add the new fan to the creator's Stream Chat community
-        // channel. Failure here is non-fatal — the subscription still
-        // completes; the fan can lazily join via /api/stream/ensure-channel
-        // when they open the community tab.
-        try {
-          if (followerUid) {
-            await ensureCommunityMembership({
-              creatorId,
-              creatorName: creatorName || creatorData.displayName || "Creator",
-              creatorImage: creatorData.photoURL ?? null,
-              fanId: followerUid,
-            });
-          }
-        } catch (e: any) {
-          console.error("[stripe webhook] community membership failed:", e.message);
         }
 
         const results = await Promise.all([
@@ -536,25 +518,12 @@ export async function POST(req: NextRequest) {
       .get();
     if (!fanSubSnap.empty) {
       const subDoc = fanSubSnap.docs[0];
-      const subData = subDoc.data();
       await subDoc.ref.update({
         status: "cancelled",
         cancelledAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
       });
       console.log(`⬇️  Fan subscription ${sub.id} marked cancelled.`);
-      // Remove the fan from the creator's Stream community channel so
-      // they lose access to broadcasts. Non-fatal.
-      try {
-        if (subData.followerId && subData.creatorId) {
-          await removeCommunityMembership({
-            creatorId: subData.creatorId,
-            fanId:     subData.followerId,
-          });
-        }
-      } catch (e: any) {
-        console.error("[stripe webhook] community remove failed:", e.message);
-      }
     }
   }
 

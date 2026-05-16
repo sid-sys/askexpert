@@ -75,6 +75,12 @@ function FanDashboardContent() {
   const [portalLoading, setPortalLoading] = useState(false);
   // Two-pane "My Questions" chat tab — which subscription is the active thread?
   const [selectedChatSub, setSelectedChatSub] = useState<string | null>(null);
+  // One-shot prefill of the ChatThread's "replying to" state. Populated
+  // when the fan landed here from a community-post "Reply" button, via
+  // sessionStorage so we don't have to add it to the URL.
+  const [chatReplyPrefill, setChatReplyPrefill] = useState<
+    { id: string; snippet: string; senderRole: "creator" | "fan" } | null
+  >(null);
   // Mobile single-pane switching for the chat tab. Matches the same 800px
   // breakpoint the rest of the fan-dashboard mobile chrome uses (hamburger),
   // so the chat goes mobile at the same width as everything else.
@@ -85,6 +91,33 @@ function FanDashboardContent() {
     update();
     mq.addEventListener?.("change", update);
     return () => mq.removeEventListener?.("change", update);
+  }, []);
+
+  // Honour ?sub=<id> from the URL (set by community-post Reply CTA) and
+  // pop any pending sessionStorage prefill so the chat opens with the
+  // post quoted in the reply chip above the input. Runs once per session.
+  useEffect(() => {
+    const subFromUrl = searchParams?.get("sub");
+    if (subFromUrl) setSelectedChatSub(subFromUrl);
+    if (typeof window === "undefined") return;
+    try {
+      const raw = sessionStorage.getItem("community-reply-prefill");
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed?.subId && parsed?.snippet) {
+          setSelectedChatSub(parsed.subId);
+          setChatReplyPrefill({
+            id: `community:${parsed.postId}`,
+            snippet: String(parsed.snippet).slice(0, 200),
+            // The creator authored the community post, so the reply
+            // chip says "Replying to <creator name>" instead of "yourself".
+            senderRole: "creator",
+          });
+        }
+        sessionStorage.removeItem("community-reply-prefill");
+      }
+    } catch { /* ignore */ }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Lock body scroll while the mobile chat overlay is open so the page
@@ -940,6 +973,15 @@ function FanDashboardContent() {
                                 current.status === "past_due"
                                   ? "Your last payment failed."
                                   : "Subscription cancelled."
+                              }
+                              // One-shot prefill — only applied to the
+                              // FIRST ChatThread mount per landing. Cleared
+                              // here so it doesn't re-fire if the user
+                              // switches between threads.
+                              initialReplyingTo={
+                                chatReplyPrefill && currentId === selectedChatSub
+                                  ? chatReplyPrefill
+                                  : undefined
                               }
                             />
                           ) : (

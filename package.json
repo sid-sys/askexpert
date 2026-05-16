@@ -29,8 +29,6 @@
     "react-joyride": "^3.0.2",
     "recharts": "^3.8.1",
     "resend": "^6.1.3",
-    "stream-chat": "^9.44.2",
-    "stream-chat-react": "^14.2.0",
     "stripe": "^22.1.0",
     "sweetalert2": "^11.26.24"
   },
