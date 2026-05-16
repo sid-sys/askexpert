@@ -64,18 +64,25 @@ export async function ensureCommunityMembership(params: {
     console.warn("[stream] community channel type setup failed:", (e as Error).message);
   });
 
+  // Dedupe — when the creator opens their own community page, both ids
+  // are the same and Stream rejects the duplicate-member call with code 4.
+  const initialMembers = Array.from(new Set([params.creatorId, params.fanId]));
+
   // `name` isn't in stream-chat's strict ChannelData typing but Stream
   // accepts it as custom data; cast keeps TS quiet without losing the
   // human-readable channel name in dashboards / clients.
   const channel = client.channel("community", communityChannelId(params.creatorId), {
     created_by_id: params.creatorId,
-    members: [params.creatorId, params.fanId],
+    members: initialMembers,
     ...(params.creatorName ? { name: `${params.creatorName}'s Community` } : {}),
   } as any);
   await channel.create();
   // create() above adds the listed members at first creation, but on
-  // subsequent calls we still need to add new fans explicitly.
-  await channel.addMembers([params.fanId]).catch(() => { /* already a member — fine */ });
+  // subsequent calls we still need to add new fans explicitly. Skip when
+  // the fan is the creator (already in the dedup'd set).
+  if (params.fanId !== params.creatorId) {
+    await channel.addMembers([params.fanId]).catch(() => { /* already a member — fine */ });
+  }
   return channel.id!;
 }
 
