@@ -1,0 +1,85 @@
+# Firebase App Hosting config — runs Next.js SSR on Cloud Run.
+# Docs: https://firebase.google.com/docs/app-hosting/configure
+
+runConfig:
+  # Match prior Netlify sizing; tune later as needed.
+  minInstances: 0
+  maxInstances: 10
+  concurrency: 80
+  cpu: 1
+  memoryMiB: 512
+
+env:
+  # ── Public (NEXT_PUBLIC_*) — baked into the client bundle at build time.
+  - variable: NEXT_PUBLIC_FIREBASE_API_KEY
+    secret: NEXT_PUBLIC_FIREBASE_API_KEY
+    availability: [BUILD, RUNTIME]
+  - variable: NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
+    secret: NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
+    availability: [BUILD, RUNTIME]
+  - variable: NEXT_PUBLIC_FIREBASE_PROJECT_ID
+    secret: NEXT_PUBLIC_FIREBASE_PROJECT_ID
+    availability: [BUILD, RUNTIME]
+  - variable: NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
+    secret: NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
+    availability: [BUILD, RUNTIME]
+  - variable: NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
+    secret: NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
+    availability: [BUILD, RUNTIME]
+  - variable: NEXT_PUBLIC_FIREBASE_APP_ID
+    secret: NEXT_PUBLIC_FIREBASE_APP_ID
+    availability: [BUILD, RUNTIME]
+  - variable: NEXT_PUBLIC_FIREBASE_VAPID_KEY
+    secret: NEXT_PUBLIC_FIREBASE_VAPID_KEY
+    availability: [BUILD, RUNTIME]
+  - variable: NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
+    secret: NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
+    availability: [BUILD, RUNTIME]
+  - variable: NEXT_PUBLIC_APP_URL
+    secret: NEXT_PUBLIC_APP_URL
+    availability: [BUILD, RUNTIME]
+  - variable: NEXT_PUBLIC_SENTRY_DSN
+    secret: NEXT_PUBLIC_SENTRY_DSN
+    availability: [BUILD, RUNTIME]
+
+  # ── Server-only secrets — never shipped to the client.
+  # firebase-admin inits eagerly at module load in lib/firebase-admin.ts;
+  # Next 16's page-data collection executes route modules, so these must
+  # be present at BUILD too or build fails on the first admin-touching route.
+  - variable: FIREBASE_CLIENT_EMAIL
+    secret: FIREBASE_CLIENT_EMAIL
+    availability: [BUILD, RUNTIME]
+  - variable: FIREBASE_PRIVATE_KEY
+    secret: FIREBASE_PRIVATE_KEY
+    availability: [BUILD, RUNTIME]
+  - variable: STRIPE_SECRET_KEY
+    secret: STRIPE_SECRET_KEY
+  - variable: STRIPE_WEBHOOK_SECRET
+    secret: STRIPE_WEBHOOK_SECRET
+  - variable: STRIPE_CREATOR_PRICE_ID
+    secret: STRIPE_CREATOR_PRICE_ID
+  - variable: STRIPE_PRO_PRICE_ID
+    secret: STRIPE_PRO_PRICE_ID
+  - variable: ADMIN_SECRET
+    secret: ADMIN_SECRET
+  - variable: RESEND_API_KEY
+    secret: RESEND_API_KEY
+  - variable: CRON_SECRET
+    secret: CRON_SECRET
+  - variable: SENTRY_AUTH_TOKEN
+    secret: SENTRY_AUTH_TOKEN
+    availability: [BUILD]
+  - variable: UPSTASH_REDIS_REST_URL
+    secret: UPSTASH_REDIS_REST_URL
+  - variable: UPSTASH_REDIS_REST_TOKEN
+    secret: UPSTASH_REDIS_REST_TOKEN
+  - variable: RAZORPAY_KEY_ID
+    secret: RAZORPAY_KEY_ID
+  - variable: RAZORPAY_KEY_SECRET
+    secret: RAZORPAY_KEY_SECRET
+  - variable: RAZORPAY_WEBHOOK_SECRET
+    secret: RAZORPAY_WEBHOOK_SECRET
+  - variable: RAZORPAY_CREATOR_PLAN_ID
+    secret: RAZORPAY_CREATOR_PLAN_ID
+  - variable: RAZORPAY_PRO_PLAN_ID
+    secret: RAZORPAY_PRO_PLAN_ID
